@@ -34,8 +34,8 @@ type Metrics struct {
 	Up metric.Int64Gauge
 }
 
-// shutdownFunc is a delegate that shuts down the OpenTelemetry components.
-type shutdownFunc func(ctx context.Context) error
+// ShutdownFunc is a delegate that shuts down the OpenTelemetry components.
+type ShutdownFunc func(ctx context.Context) error
 
 func NewMetrics(meter metric.Meter) (*Metrics, error) {
 	req, err := meter.Int64Counter(
@@ -81,7 +81,7 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 	}, nil
 }
 
-func newPrometheusMeterProvider(res *resource.Resource, exp *prometheus.Exporter) (*sdkmetric.MeterProvider, error) {
+func NewPrometheusMeterProvider(res *resource.Resource, exp *prometheus.Exporter) (*sdkmetric.MeterProvider, error) {
 	if exp == nil {
 		return nil, errors.New("exporter cannot be nil")
 	}
@@ -93,9 +93,9 @@ func newPrometheusMeterProvider(res *resource.Resource, exp *prometheus.Exporter
 	return meterProvider, nil
 }
 
-func InitMetrics(version string) (shutdownFunc, *Metrics, error) {
+func InitMetrics(version string) (ShutdownFunc, *Metrics, error) {
 	// Initialized the returned shutdownFunc to no-op.
-	shutdownFunc := func(ctx context.Context) error { return nil }
+	shutdown := func(_ context.Context) error { return nil }
 
 	res, err := resource.New(context.Background(),
 		resource.WithAttributes(
@@ -105,29 +105,29 @@ func InitMetrics(version string) (shutdownFunc, *Metrics, error) {
 		resource.WithProcessRuntimeDescription(),
 	)
 	if err != nil {
-		return shutdownFunc, nil, fmt.Errorf("failed to create resource: %w", err)
+		return shutdown, nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
 	res, err = resource.Merge(resource.Default(), res)
 	if err != nil {
-		return shutdownFunc, nil, fmt.Errorf("failed to merge resources: %w", err)
+		return shutdown, nil, fmt.Errorf("failed to merge resources: %w", err)
 	}
 
 	exporter, err := prometheus.New()
 	if err != nil {
-		return shutdownFunc, nil, fmt.Errorf("failed to create Prometheus exporter: %w", err)
+		return shutdown, nil, fmt.Errorf("failed to create Prometheus exporter: %w", err)
 	}
 
-	mp, err := newPrometheusMeterProvider(res, exporter)
+	mp, err := NewPrometheusMeterProvider(res, exporter)
 	if err != nil {
-		return shutdownFunc, nil, fmt.Errorf("failed to create Prometheus meter provider: %w", err)
+		return shutdown, nil, fmt.Errorf("failed to create Prometheus meter provider: %w", err)
 	}
 	otel.SetMeterProvider(mp)
 
 	// Update the returned shutdownFunc that calls metric provider
 	// shutdown methods and make sure that a non-nil error is returned
 	// if any returned an error.
-	shutdownFunc = func(ctx context.Context) error {
+	shutdown = func(ctx context.Context) error {
 		var retErr error
 		if err := mp.Shutdown(ctx); err != nil {
 			retErr = err
@@ -137,7 +137,7 @@ func InitMetrics(version string) (shutdownFunc, *Metrics, error) {
 
 	meter := mp.Meter(Namespace, metric.WithSchemaURL(semconv.SchemaURL), metric.WithInstrumentationVersion(runtime.Version()))
 	metrics, err := NewMetrics(meter)
-	return shutdownFunc, metrics, err
+	return shutdown, metrics, err
 }
 
 // PrometheusHandler returns the HTTP handler for Prometheus metrics

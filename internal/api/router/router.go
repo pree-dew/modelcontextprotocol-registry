@@ -18,8 +18,7 @@ import (
 
 // Middleware configuration options
 type middlewareConfig struct {
-	skipPaths          map[string]bool
-	attributeExtractor func(huma.Context) []attribute.KeyValue
+	skipPaths map[string]bool
 }
 
 type MiddlewareOption func(*middlewareConfig)
@@ -33,18 +32,6 @@ func getRoutePath(ctx huma.Context) string {
 
 	// Fallback to URL path (less ideal for metrics as it includes path parameters)
 	return ctx.URL().Path
-}
-
-// getErrorType categorizes errors based on status code
-func getErrorType(statusCode int) string {
-	switch {
-	case statusCode >= 400 && statusCode < 500:
-		return "client_error"
-	case statusCode >= 500:
-		return "server_error"
-	default:
-		return "unknown"
-	}
 }
 
 func metricTelemetryMiddleware(metrics *telemetry.Metrics, options ...MiddlewareOption) func(huma.Context, func(huma.Context)) {
@@ -88,8 +75,7 @@ func metricTelemetryMiddleware(metrics *telemetry.Metrics, options ...Middleware
 		metrics.Requests.Add(ctx.Context(), 1, metric.WithAttributes(attrs...))
 
 		if statusCode >= 400 {
-			errorAttrs := append(attrs, attribute.String("error_type", getErrorType(statusCode)))
-			metrics.ErrorCount.Add(ctx.Context(), 1, metric.WithAttributes(errorAttrs...))
+			metrics.ErrorCount.Add(ctx.Context(), 1, metric.WithAttributes(attrs...))
 		}
 
 		metrics.RequestDuration.Record(ctx.Context(), duration, metric.WithAttributes(attrs...))

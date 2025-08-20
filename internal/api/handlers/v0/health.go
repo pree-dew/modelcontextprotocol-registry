@@ -29,7 +29,7 @@ func RegisterHealthEndpoint(api huma.API, cfg *config.Config, metrics *telemetry
 		Tags:        []string{"health"},
 	}, func(ctx context.Context, _ *struct{}) (*Response[HealthBody], error) {
 		// Record the health check metrics
-		recordHealthMetrics(metrics, ctx, "/v0/health", cfg.Version)
+		recordHealthMetrics(ctx, metrics, "/v0/health", cfg.Version)
 
 		return &Response[HealthBody]{
 			Body: HealthBody{
@@ -41,7 +41,7 @@ func RegisterHealthEndpoint(api huma.API, cfg *config.Config, metrics *telemetry
 }
 
 // recordHealthMetrics records the health check metrics
-func recordHealthMetrics(metrics *telemetry.Metrics, ctx context.Context, path string, version string) {
+func recordHealthMetrics(ctx context.Context, metrics *telemetry.Metrics, path string, version string) {
 	attrs := []attribute.KeyValue{
 		attribute.String("path", path),
 		attribute.String("version", version),

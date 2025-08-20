@@ -1,4 +1,4 @@
-package telemetry
+package telemetry_test
 
 import (
 	"errors"
@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+
+	"github.com/modelcontextprotocol/registry/internal/telemetry"
 )
 
 func TestNewMetrics(t *testing.T) {
@@ -29,7 +31,7 @@ func TestNewMetrics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			metrics, err := NewMetrics(tt.meter)
+			metrics, err := telemetry.NewMetrics(tt.meter)
 
 			// Ensure the metric is registered correctly
 			assert.NoError(t, err)
@@ -69,7 +71,7 @@ func TestNewPrometheusMeterProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res := resource.NewSchemaless() // Use an empty resource for testing.
 			exp, _ := tt.mockPrometheus()
-			mp, err := newPrometheusMeterProvider(res, exp)
+			mp, err := telemetry.NewPrometheusMeterProvider(res, exp)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
