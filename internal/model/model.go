@@ -4,8 +4,10 @@ package model
 type AuthMethod string
 
 const (
-	// GitHub OAuth authentication
-	AuthMethodGitHub AuthMethod = "github"
+	// GitHub OAuth authentication (access token)
+	AuthMethodGitHubAT AuthMethod = "github-at"
+	// GitHub Actions OIDC authentication
+	AuthMethodGitHubOIDC AuthMethod = "github-oidc"
 	// No authentication - should only be used for local development and testing
 	AuthMethodNone AuthMethod = "none"
 )

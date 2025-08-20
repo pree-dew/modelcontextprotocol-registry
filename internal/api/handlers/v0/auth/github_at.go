@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/danielgtaylor/huma/v2"
+	v0 "github.com/modelcontextprotocol/registry/internal/api/handlers/v0"
 	"github.com/modelcontextprotocol/registry/internal/auth"
 	"github.com/modelcontextprotocol/registry/internal/config"
 	"github.com/modelcontextprotocol/registry/internal/model"
@@ -42,29 +43,25 @@ func (h *GitHubHandler) SetBaseURL(url string) {
 	h.baseURL = url
 }
 
-// RegisterGitHubEndpoint registers the GitHub authentication endpoint
-func RegisterGitHubEndpoint(api huma.API, cfg *config.Config) {
+// RegisterGitHubATEndpoint registers the GitHub access token authentication endpoint
+func RegisterGitHubATEndpoint(api huma.API, cfg *config.Config) {
 	handler := NewGitHubHandler(cfg)
 
 	// GitHub token exchange endpoint
 	huma.Register(api, huma.Operation{
 		OperationID: "exchange-github-token",
 		Method:      http.MethodPost,
-		Path:        "/v0/auth/github",
-		Summary:     "Exchange GitHub token for Registry JWT",
-		Description: "Exchange a GitHub OAuth token for a short-lived Registry JWT token",
+		Path:        "/v0/auth/github-at",
+		Summary:     "Exchange GitHub OAuth access token for Registry JWT",
+		Description: "Exchange a GitHub OAuth access token for a short-lived Registry JWT token",
 		Tags:        []string{"auth"},
-	}, func(ctx context.Context, input *GitHubTokenExchangeInput) (*struct {
-		Body auth.TokenResponse `json:"body"`
-	}, error) {
+	}, func(ctx context.Context, input *GitHubTokenExchangeInput) (*v0.Response[auth.TokenResponse], error) {
 		response, err := handler.ExchangeToken(ctx, input.Body.GitHubToken)
 		if err != nil {
 			return nil, huma.Error401Unauthorized("Token exchange failed", err)
 		}
 
-		return &struct {
-			Body auth.TokenResponse `json:"body"`
-		}{
+		return &v0.Response[auth.TokenResponse]{
 			Body: *response,
 		}, nil
 	})
@@ -79,7 +76,7 @@ func (h *GitHubHandler) ExchangeToken(ctx context.Context, githubToken string) (
 	}
 
 	// Get user's organizations
-	orgs, err := h.getGitHubUserOrgs(ctx, githubToken)
+	orgs, err := h.getGitHubUserOrgs(ctx, user.Login, githubToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get GitHub organizations: %w", err)
 	}
@@ -89,7 +86,7 @@ func (h *GitHubHandler) ExchangeToken(ctx context.Context, githubToken string) (
 
 	// Create JWT claims with GitHub user info
 	claims := auth.JWTClaims{
-		AuthMethod:        model.AuthMethodGitHub,
+		AuthMethod:        model.AuthMethodGitHubAT,
 		AuthMethodSubject: user.Login,
 		Permissions:       permissions,
 	}
@@ -138,9 +135,8 @@ func (h *GitHubHandler) getGitHubUser(ctx context.Context, token string) (*GitHu
 	return &user, nil
 }
 
-// getGitHubUserOrgs gets the authenticated user's organizations
-func (h *GitHubHandler) getGitHubUserOrgs(ctx context.Context, token string) ([]GitHubUserOrOrg, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.baseURL+"/user/orgs", nil)
+func (h *GitHubHandler) getGitHubUserOrgs(ctx context.Context, username string, token string) ([]GitHubUserOrOrg, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.baseURL+"/users/"+username+"/orgs", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

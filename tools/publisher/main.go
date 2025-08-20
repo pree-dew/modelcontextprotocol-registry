@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/registry/tools/publisher/auth"
-	"github.com/modelcontextprotocol/registry/tools/publisher/auth/github"
 )
 
 // Server structure types for JSON generation
@@ -103,8 +102,7 @@ func publishCommand() error {
 	publishFlags.StringVar(&registryURL, "registry-url", "", "URL of the registry (required)")
 	publishFlags.StringVar(&mcpFilePath, "mcp-file", "", "path to the MCP file (required)")
 	publishFlags.BoolVar(&forceLogin, "login", false, "force a new login even if a token exists")
-	publishFlags.StringVar(&authMethod, "auth-method", "github-oauth",
-		"authentication method to use (default: github-oauth)")
+	publishFlags.StringVar(&authMethod, "auth-method", "github-at", "authentication method (default: github-at)")
 
 	// Set custom usage function
 	publishFlags.Usage = func() {
@@ -116,7 +114,7 @@ func publishCommand() error {
 		fmt.Fprint(os.Stdout, "  --registry-url string    URL of the registry (required)\n")
 		fmt.Fprint(os.Stdout, "  --mcp-file string        path to the MCP file (required)\n")
 		fmt.Fprint(os.Stdout, "  --login                  force a new login even if a token exists\n")
-		fmt.Fprint(os.Stdout, "  --auth-method string     authentication method to use (default: github-oauth)\n")
+		fmt.Fprint(os.Stdout, "  --auth-method string     authentication method (default: github-at)\n")
 	}
 
 	if err := publishFlags.Parse(os.Args[2:]); err != nil {
@@ -136,9 +134,15 @@ func publishCommand() error {
 
 	var authProvider auth.Provider // Determine the authentication method
 	switch authMethod {
-	case "github-oauth":
-		log.Println("Using GitHub OAuth for authentication")
-		authProvider = github.NewOAuthProvider(forceLogin, registryURL)
+	case "github-at":
+		log.Println("Using GitHub Access Token for authentication")
+		authProvider = auth.NewGitHubATProvider(forceLogin, registryURL)
+	case "github-oidc":
+		log.Println("Using GitHub Actions OIDC for authentication")
+		authProvider = auth.NewGitHubOIDCProvider(registryURL)
+	case "none":
+		log.Println("Using anonymous authentication")
+		authProvider = auth.NewNoneProvider(registryURL)
 	default:
 		return fmt.Errorf("unsupported authentication method: %s", authMethod)
 	}
