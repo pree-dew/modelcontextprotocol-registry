@@ -34,7 +34,7 @@ func getRoutePath(ctx huma.Context) string {
 	return ctx.URL().Path
 }
 
-func metricTelemetryMiddleware(metrics *telemetry.Metrics, options ...MiddlewareOption) func(huma.Context, func(huma.Context)) {
+func MetricTelemetryMiddleware(metrics *telemetry.Metrics, options ...MiddlewareOption) func(huma.Context, func(huma.Context)) {
 	config := &middlewareConfig{
 		skipPaths: make(map[string]bool),
 	}
@@ -105,7 +105,7 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 	api := humago.New(mux, humaConfig)
 
 	// Add metrics middleware with options
-	api.UseMiddleware(metricTelemetryMiddleware(metrics,
+	api.UseMiddleware(MetricTelemetryMiddleware(metrics,
 		WithSkipPaths("/health", "/metrics", "/ping", "/docs"),
 	))
 

@@ -6,9 +6,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	v0 "github.com/modelcontextprotocol/registry/internal/api/handlers/v0"
 	"github.com/modelcontextprotocol/registry/internal/api/router"
 	"github.com/modelcontextprotocol/registry/internal/config"
 	"github.com/modelcontextprotocol/registry/internal/model"
@@ -44,8 +47,19 @@ func TestPrometheusHandler(t *testing.T) {
 
 	cfg := config.NewConfig()
 	shutdownTelemetry, metrics, _ := telemetry.InitMetrics("dev")
+
 	mux := http.NewServeMux()
-	_ = router.NewHumaAPI(cfg, mockRegistry, mux, metrics)
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+
+	// Add metrics middleware with options
+	api.UseMiddleware(router.MetricTelemetryMiddleware(metrics,
+		router.WithSkipPaths("/health", "/metrics", "/ping", "/docs"),
+	))
+	v0.RegisterHealthEndpoint(api, cfg, metrics)
+	v0.RegisterServersEndpoints(api, mockRegistry)
+
+	// Add /metrics for Prometheus metrics using promhttp
+	mux.Handle("/metrics", metrics.PrometheusHandler())
 
 	// Create request
 	url := "/v0/servers/" + serverID
