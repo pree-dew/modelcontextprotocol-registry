@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/modelcontextprotocol/registry/internal/api/router"
@@ -14,45 +15,32 @@ import (
 	"github.com/modelcontextprotocol/registry/internal/telemetry"
 )
 
-func mockServerEndpoint(registry *MockRegistryService) {
-	servers := []model.Server{
-		{
-			ID:          "550e8400-e29b-41d4-a716-446655440001",
-			Name:        "test-server-1",
-			Description: "First test server",
+func mockServerEndpoint(registry *MockRegistryService, serverID string) {
+	serverDetail := &model.ServerDetail{
+		Server: model.Server{
+			ID:          serverID,
+			Name:        "test-server-detail",
+			Description: "Test server detail",
 			Repository: model.Repository{
-				URL:    "https://github.com/example/test-server-1",
+				URL:    "https://github.com/example/test-server-detail",
 				Source: "github",
-				ID:     "example/test-server-1",
-			},
-			VersionDetail: model.VersionDetail{
-				Version:     "1.0.0",
-				ReleaseDate: "2025-05-25T00:00:00Z",
-				IsLatest:    true,
-			},
-		},
-		{
-			ID:          "550e8400-e29b-41d4-a716-446655440002",
-			Name:        "test-server-2",
-			Description: "Second test server",
-			Repository: model.Repository{
-				URL:    "https://github.com/example/test-server-2",
-				Source: "github",
-				ID:     "example/test-server-2",
+				ID:     "example/test-server-detail",
 			},
 			VersionDetail: model.VersionDetail{
 				Version:     "2.0.0",
-				ReleaseDate: "2025-05-26T00:00:00Z",
+				ReleaseDate: "2025-05-27T12:00:00Z",
 				IsLatest:    true,
 			},
 		},
 	}
-	registry.Mock.On("List", "", 30).Return(servers, "", nil)
+	registry.Mock.On("GetByID", serverID).Return(serverDetail, nil)
 }
 
-func TestPromtheusHandler(t *testing.T) {
+func TestPrometheusHandler(t *testing.T) {
 	mockRegistry := new(MockRegistryService)
-	mockServerEndpoint(mockRegistry)
+
+	serverID := uuid.New().String()
+	mockServerEndpoint(mockRegistry, serverID)
 
 	cfg := config.NewConfig()
 	shutdownTelemetry, metrics, _ := telemetry.InitMetrics("dev")
@@ -60,7 +48,7 @@ func TestPromtheusHandler(t *testing.T) {
 	_ = router.NewHumaAPI(cfg, mockRegistry, mux, metrics)
 
 	// Create request
-	url := "/v0/servers"
+	url := "/v0/servers/" + serverID
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	w := httptest.NewRecorder()
 
@@ -81,6 +69,9 @@ func TestPromtheusHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "Expected status OK for /metrics endpoint")
 
+	body := w.Body.String()
 	// Check if the response body contains expected metrics
-	assert.Contains(t, w.Body.String(), "# HELP mcp_registry_http_requests_total Total number of HTTP requests")
+	assert.Contains(t, body, "mcp_registry_http_request_duration_bucket")
+	assert.Contains(t, body, "mcp_registry_http_requests_total")
+	assert.Contains(t, body, "path=\"/v0/servers/{id}\"")
 }
