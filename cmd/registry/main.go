@@ -95,6 +95,7 @@ func main() {
 	shutdownTelemetry, metrics, err := telemetry.InitMetrics(cfg.Version)
 	if err != nil {
 		log.Printf("Failed to initialize metrics: %v", err)
+		return
 	}
 
 	defer func() {
