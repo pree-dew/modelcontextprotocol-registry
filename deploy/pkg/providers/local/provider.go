@@ -220,7 +220,7 @@ func (p *Provider) CreateBackupStorage(ctx *pulumi.Context, cluster *providers.P
 					Containers: corev1.ContainerArray{
 						&corev1.ContainerArgs{
 							Name:  pulumi.String("mc"),
-							Image: pulumi.String("minio/mc:RELEASE.2025-07-19T03-52-40Z"),
+							Image: pulumi.String("minio/mc:latest@sha256:fb8f773eac8ef9d6da0486d5dec2f42f219358bcb8de579d1623d518c9ebd4cc"),
 							Command: pulumi.StringArray{
 								pulumi.String("/bin/sh"),
 								pulumi.String("-c"),

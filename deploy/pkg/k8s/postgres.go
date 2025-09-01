@@ -60,7 +60,7 @@ func DeployPostgresDatabases(ctx *pulumi.Context, cluster *providers.ProviderInf
 				},
 			},
 		},
-	}, pulumi.Provider(cluster.Provider), pulumi.DependsOnInputs(cloudNativePG.Ready))
+	}, pulumi.Provider(cluster.Provider), pulumi.DependsOnInputs(cloudNativePG.Ready), pulumi.RetainOnDelete(true))
 	if err != nil {
 		return nil, err
 	}

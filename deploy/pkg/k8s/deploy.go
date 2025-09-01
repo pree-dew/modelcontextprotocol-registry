@@ -40,7 +40,7 @@ func DeployAll(ctx *pulumi.Context, cluster *providers.ProviderInfo, backupStora
 	}
 
 	// Deploy monitoring stack
-	err = DeployMonitoringStack(ctx, cluster, environment)
+	err = DeployMonitoringStack(ctx, cluster, environment, ingressNginx)
 	if err != nil {
 		return nil, err
 	}
