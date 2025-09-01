@@ -32,6 +32,21 @@ func DeployMonitoringStack(ctx *pulumi.Context, cluster *providers.ProviderInfo,
 		FetchArgs: helm.FetchArgs{
 			Repo: pulumi.String("https://victoriametrics.github.io/helm-charts/"),
 		},
+		Values: pulumi.Map{
+			"server": pulumi.Map{
+				"retentionPeriod": pulumi.String("14d"),
+				"resources": pulumi.Map{
+					"requests": pulumi.Map{
+						"memory": pulumi.String("2Gi"),
+						"cpu":    pulumi.String("500m"),
+					},
+					"limits": pulumi.Map{
+						"memory": pulumi.String("4Gi"),
+						"cpu":    pulumi.String("1"),
+					},
+				},
+			},
+		},
 	}, pulumi.Provider(cluster.Provider))
 	if err != nil {
 		return err
@@ -52,6 +67,9 @@ func DeployMonitoringStack(ctx *pulumi.Context, cluster *providers.ProviderInfo,
 				},
 			},
 			"config": pulumi.Map{
+				"global": pulumi.Map{
+					"scrape_interval": pulumi.String("60s"),
+				},
 				"scrape_configs": pulumi.Array{
 					pulumi.Map{
 						"job_name": pulumi.String("mcp-registry"),
@@ -71,6 +89,16 @@ func DeployMonitoringStack(ctx *pulumi.Context, cluster *providers.ProviderInfo,
 							},
 						},
 					},
+				},
+			},
+			"resources": pulumi.Map{
+				"requests": pulumi.Map{
+					"memory": pulumi.String("256Mi"),
+					"cpu":    pulumi.String("100m"),
+				},
+				"limits": pulumi.Map{
+					"memory": pulumi.String("512Mi"),
+					"cpu":    pulumi.String("200m"),
 				},
 			},
 		},
@@ -232,6 +260,16 @@ func deployGrafana(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns *cor
 						}).(pulumi.StringOutput),
 						"key": pulumi.String("dbname"),
 					},
+				},
+			},
+			"resources": pulumi.Map{
+				"requests": pulumi.Map{
+					"memory": pulumi.String("512Mi"),
+					"cpu":    pulumi.String("200m"),
+				},
+				"limits": pulumi.Map{
+					"memory": pulumi.String("1Gi"),
+					"cpu":    pulumi.String("500m"),
 				},
 			},
 		},
