@@ -280,14 +280,6 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							},
 						},
 					},
-					"filter/logging_services": pulumi.Map{
-						"error_mode": pulumi.String("ignore"),
-						"logs": pulumi.Map{
-							"log_record": pulumi.StringArray{
-								pulumi.String(`resource.attributes["k8s.namespace.name"] != "default"`),
-							},
-						},
-					},
 				},
 				"exporters": pulumi.Map{
 					"otlphttp/victorialogs": pulumi.Map{
@@ -315,7 +307,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 					"pipelines": pulumi.Map{
 						"logs": pulumi.Map{
 							"receivers":  pulumi.StringArray{pulumi.String("filelog")},
-							"processors": pulumi.StringArray{pulumi.String("batch"), pulumi.String("k8sattributes"), pulumi.String("filter/logging_services")},
+							"processors": pulumi.StringArray{pulumi.String("batch"), pulumi.String("k8sattributes")},
 							"exporters":  pulumi.StringArray{pulumi.String("otlphttp/victorialogs")},
 						},
 					},
