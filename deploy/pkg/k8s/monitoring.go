@@ -230,7 +230,6 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 				"start_at":          "end",
 				"include_file_path": true,
 				"include_file_name": false,
-				"storage":           "file_storage/filelogreceiver",
 				"operators": []map[string]interface{}{
 					{
 						"type":       "regex_parser",
@@ -342,7 +341,6 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 			},
 		},
 		"service": map[string]interface{}{
-			"extensions": []string{"file_storage/filelogreceiver", "file_storage/otlpoutput"},
 			"pipelines": map[string]interface{}{
 				"logs": map[string]interface{}{
 					"receivers":  []string{"filelog"},
