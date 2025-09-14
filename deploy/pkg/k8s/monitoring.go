@@ -225,7 +225,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 	otelConfig := map[string]interface{}{
 		"receivers": map[string]interface{}{
 			"filelog": map[string]interface{}{
-				"include":           []string{"/var/log/pods/default*/*/*.log"},
+				"include":           []string{"/var/log/pods/default_mcp-registry*/*/*.log"},
 				"exclude":           []string{"/var/log/pods/*/*-collector-*/*.log"},
 				"start_at":          "end",
 				"include_file_path": true,
@@ -544,7 +544,7 @@ func deployGrafana(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns *cor
 			},
 			{
 				"name":   "VictoriaLogs",
-				"type":   "loki",
+				"type":   "victoriametrics-logs-datasource",
 				"url":    "http://victoria-logs-victoria-logs-single-server:9428",
 				"access": "proxy",
 				"jsonData": map[string]interface{}{
@@ -578,6 +578,9 @@ func deployGrafana(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns *cor
 		},
 		Namespace: ns.Metadata.Name().Elem(),
 		Values: pulumi.Map{
+			"plugins": pulumi.Array{
+				pulumi.String("victoriametrics-logs-datasource"),
+			},
 			"extraConfigmapMounts": pulumi.Array{
 				pulumi.Map{
 					"name":      pulumi.String("grafana-datasources"),
