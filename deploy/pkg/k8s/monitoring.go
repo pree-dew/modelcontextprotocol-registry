@@ -225,31 +225,49 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 	otelConfig := map[string]interface{}{
 		"receivers": map[string]interface{}{
 			"filelog/registry": map[string]interface{}{
-				"include":           []string{"/var/log/pods/*_mcp-registry-*/*/*.log"},
-				"exclude":           []string{"/var/log/pods/*_mcp-registry-*/*/*.gz"},
+				"include":           []string{"/var/log/pods/default_mcp-registry-*/*/*.log"},
+				"exclude":           []string{"/var/log/pods/default_mcp-registry-*/*/*.gz"},
 				"start_at":          "end",
 				"include_file_path": true,
 				"include_file_name": false,
-			},
-			"filelog/postgres": map[string]interface{}{
-				"include":           []string{"/var/log/pods/*postgres*/*/*.log"},
-				"exclude":           []string{"/var/log/pods/*postgres*/*/*.gz"},
-				"start_at":          "end",
-				"include_file_path": true,
-				"include_file_name": false,
+				"operators": []map[string]interface{}{
+					{
+						"type":  "regex_parser",
+						"regex": `^(?P<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+Z)\s+(?P<stream>stdout|stderr)\s+(?P<logtag>\w)\s+(?P<log>.*)`,
+						"timestamp": map[string]interface{}{
+							"parse_from": "attributes.time",
+							"layout":     "%Y-%m-%dT%H:%M:%S.%LZ",
+						},
+					},
+					{
+						"type": "move",
+						"from": "attributes.log",
+						"to":   "body",
+					},
+					{
+						"type": "move",
+						"from": "attributes.stream",
+						"to":   "attributes['log.iostream']",
+					},
+				},
 			},
 		},
 		"processors": map[string]interface{}{
-			"resourcedetection": map[string]interface{}{
-				"detectors": []string{"env", "system"},
-				"timeout":   "2s",
-				"override":  false,
-			},
 			"k8sattributes": map[string]interface{}{
 				"auth_type":   "serviceAccount",
 				"passthrough": false,
 				"filter": map[string]interface{}{
 					"node_from_env_var": "KUBE_NODE_NAME",
+				},
+				"pod_association": []map[string]interface{}{
+					{
+						"sources": []map[string]interface{}{
+							{
+								"from": "resource_attribute",
+								"name": "log.file.path",
+							},
+						},
+					},
 				},
 				"extract": map[string]interface{}{
 					"metadata": []string{
@@ -259,6 +277,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 						"k8s.namespace.name",
 						"k8s.node.name",
 						"k8s.pod.start_time",
+						"k8s.container.name",
 					},
 					"labels": []map[string]interface{}{
 						{
@@ -267,12 +286,24 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							"from":     "pod",
 						},
 						{
-							"tag_name": "version.label",
-							"key":      "version",
+							"tag_name": "environment.label",
+							"key":      "environment",
+							"from":     "pod",
+						},
+					},
+					"annotations": []map[string]interface{}{
+						{
+							"tag_name": "deploy_commit",
+							"key":      "registry.modelcontextprotocol.io/deployCommit",
 							"from":     "pod",
 						},
 					},
 				},
+			},
+			"resourcedetection": map[string]interface{}{
+				"detectors": []string{"env", "system"},
+				"timeout":   "2s",
+				"override":  false,
 			},
 			"resource": map[string]interface{}{
 				"attributes": []map[string]interface{}{
@@ -287,9 +318,14 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 						"action":         "insert",
 					},
 					{
-						"key":            "service.version",
-						"from_attribute": "version.label",
+						"key":            "service.instance.id",
+						"from_attribute": "k8s.pod.name",
 						"action":         "insert",
+					},
+					{
+						"key":    "k8s.cluster.name",
+						"value":  "mcp-registry-" + environment,
+						"action": "insert",
 					},
 				},
 			},
@@ -323,8 +359,8 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 		"service": map[string]interface{}{
 			"pipelines": map[string]interface{}{
 				"logs": map[string]interface{}{
-					"receivers":  []string{"filelog/registry", "filelog/postgres"},
-					"processors": []string{"resourcedetection", "k8sattributes", "resource", "batch"},
+					"receivers":  []string{"filelog/registry"},
+					"processors": []string{"k8sattributes", "resourcedetection", "resource", "batch"},
 					"exporters":  []string{"otlphttp/victorialogs"},
 				},
 			},
