@@ -241,7 +241,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 		},
 		"processors": map[string]interface{}{
 			"resourcedetection": map[string]interface{}{
-				"detectors": []string{"env", "system", "k8snode"},
+				"detectors": []string{"env", "system"},
 				"timeout":   "2s",
 				"override":  false,
 			},
@@ -391,14 +391,6 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							Env: corev1.EnvVarArray{
 								&corev1.EnvVarArgs{
 									Name: pulumi.String("KUBE_NODE_NAME"),
-									ValueFrom: &corev1.EnvVarSourceArgs{
-										FieldRef: &corev1.ObjectFieldSelectorArgs{
-											FieldPath: pulumi.String("spec.nodeName"),
-										},
-									},
-								},
-								&corev1.EnvVarArgs{
-									Name: pulumi.String("NODE_NAME"),
 									ValueFrom: &corev1.EnvVarSourceArgs{
 										FieldRef: &corev1.ObjectFieldSelectorArgs{
 											FieldPath: pulumi.String("spec.nodeName"),
