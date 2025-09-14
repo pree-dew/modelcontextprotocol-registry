@@ -135,15 +135,15 @@ func deployVictoriaLogs(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns
 		},
 		Values: pulumi.Map{
 			"server": pulumi.Map{
-				"retentionPeriod": pulumi.String("30d"),
+				"retentionPeriod": pulumi.String("15d"),
 				"resources": pulumi.Map{
 					"requests": pulumi.Map{
 						"memory": pulumi.String("256Mi"),
 						"cpu":    pulumi.String("100m"),
 					},
 					"limits": pulumi.Map{
-						"memory": pulumi.String("512Mi"),
-						"cpu":    pulumi.String("500m"),
+						"memory": pulumi.String("2Gi"),
+						"cpu":    pulumi.String("1000m"),
 					},
 				},
 				"persistence": pulumi.Map{
@@ -299,8 +299,8 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 			},
 		},
 		"exporters": map[string]interface{}{
-			"victorialogs": map[string]interface{}{
-				"endpoint": "http://victoria-logs-victoria-logs-single-server:9428/insert/jsonline",
+			"otlphttp/victorialogs": map[string]interface{}{
+				"logs_endpoint": "http://victoria-logs-victoria-logs-single-server:9428/insert/opentelemetry/v1/logs",
 				"headers": map[string]interface{}{
 					"VL-Msg-Field":     "body",
 					"VL-Time-Field":    "timestamp",
@@ -325,7 +325,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 				"logs": map[string]interface{}{
 					"receivers":  []string{"filelog/registry", "filelog/postgres"},
 					"processors": []string{"resourcedetection", "k8sattributes", "resource", "batch"},
-					"exporters":  []string{"victorialogs"},
+					"exporters":  []string{"otlphttp/victorialogs"},
 				},
 			},
 		},
