@@ -224,50 +224,58 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 	// Create OpenTelemetry Collector configuration
 	otelConfig := map[string]interface{}{
 		"receivers": map[string]interface{}{
-			"filelog/registry": map[string]interface{}{
-				"include":           []string{"/var/log/pods/default_mcp-registry-*/*/*.log"},
-				"exclude":           []string{"/var/log/pods/default_mcp-registry-*/*/*.gz"},
+			"filelog": map[string]interface{}{
+				"include":           []string{"/var/log/pods/default*/*/*.log"},
+				"exclude":           []string{"/var/log/pods/*/*-collector-*/*.log"},
 				"start_at":          "end",
 				"include_file_path": true,
 				"include_file_name": false,
+				"storage":           "file_storage/filelogreceiver",
 				"operators": []map[string]interface{}{
 					{
-						"type":  "regex_parser",
-						"regex": `^(?P<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+Z)\s+(?P<stream>stdout|stderr)\s+(?P<logtag>\w)\s+(?P<log>.*)`,
-						"timestamp": map[string]interface{}{
-							"parse_from": "attributes.time",
-							"layout":     "%Y-%m-%dT%H:%M:%S.%LZ",
+						"type":       "regex_parser",
+						"id":         "extract_metadata_from_filepath",
+						"regex":      `^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log`,
+						"parse_from": "attributes[\"log.file.path\"]",
+						"cache": map[string]interface{}{
+							"size": 128,
 						},
 					},
 					{
 						"type": "move",
-						"from": "attributes.log",
-						"to":   "body",
+						"from": "attributes.container_name",
+						"to":   "resource[\"k8s.container.name\"]",
 					},
 					{
 						"type": "move",
-						"from": "attributes.stream",
-						"to":   "attributes['log.iostream']",
+						"from": "attributes.namespace",
+						"to":   "resource[\"k8s.namespace.name\"]",
+					},
+					{
+						"type": "move",
+						"from": "attributes.pod_name",
+						"to":   "resource[\"k8s.pod.name\"]",
+					},
+					{
+						"type": "move",
+						"from": "attributes.restart_count",
+						"to":   "resource[\"k8s.container.restart_count\"]",
+					},
+					{
+						"type": "move",
+						"from": "attributes.uid",
+						"to":   "resource[\"k8s.pod.uid\"]",
 					},
 				},
 			},
 		},
 		"processors": map[string]interface{}{
+			"batch": map[string]interface{}{},
 			"k8sattributes": map[string]interface{}{
 				"auth_type":   "serviceAccount",
 				"passthrough": false,
 				"filter": map[string]interface{}{
-					"node_from_env_var": "KUBE_NODE_NAME",
-				},
-				"pod_association": []map[string]interface{}{
-					{
-						"sources": []map[string]interface{}{
-							{
-								"from": "resource_attribute",
-								"name": "log.file.path",
-							},
-						},
-					},
+					"node_from_env_var": "KUBERNETES_NODE_NAME",
 				},
 				"extract": map[string]interface{}{
 					"metadata": []string{
@@ -277,61 +285,38 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 						"k8s.namespace.name",
 						"k8s.node.name",
 						"k8s.pod.start_time",
-						"k8s.container.name",
+						"k8s.cluster.uid",
 					},
 					"labels": []map[string]interface{}{
 						{
-							"tag_name": "app.label",
+							"tag_name": "app",
 							"key":      "app",
 							"from":     "pod",
 						},
-						{
-							"tag_name": "environment.label",
-							"key":      "environment",
-							"from":     "pod",
-						},
 					},
-					"annotations": []map[string]interface{}{
-						{
-							"tag_name": "deploy_commit",
-							"key":      "registry.modelcontextprotocol.io/deployCommit",
-							"from":     "pod",
+				},
+				"pod_association": []map[string]interface{}{
+					{
+						"sources": []map[string]interface{}{
+							{
+								"from": "resource_attribute",
+								"name": "k8s.pod.name",
+							},
+							{
+								"from": "resource_attribute",
+								"name": "k8s.namespace.name",
+							},
 						},
 					},
 				},
 			},
-			"resourcedetection": map[string]interface{}{
-				"detectors": []string{"env", "system"},
-				"timeout":   "2s",
-				"override":  false,
-			},
-			"resource": map[string]interface{}{
-				"attributes": []map[string]interface{}{
-					{
-						"key":    "environment",
-						"value":  environment,
-						"action": "insert",
-					},
-					{
-						"key":            "service.name",
-						"from_attribute": "k8s.deployment.name",
-						"action":         "insert",
-					},
-					{
-						"key":            "service.instance.id",
-						"from_attribute": "k8s.pod.name",
-						"action":         "insert",
-					},
-					{
-						"key":    "k8s.cluster.name",
-						"value":  "mcp-registry-" + environment,
-						"action": "insert",
+			"filter/logging_services": map[string]interface{}{
+				"error_mode": "ignore",
+				"logs": map[string]interface{}{
+					"log_record": []string{
+						`resource.attributes["k8s.namespace.name"] != "default"`,
 					},
 				},
-			},
-			"batch": map[string]interface{}{
-				"timeout":         "1s",
-				"send_batch_size": 1024,
 			},
 		},
 		"exporters": map[string]interface{}{
@@ -357,10 +342,11 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 			},
 		},
 		"service": map[string]interface{}{
+			"extensions": []string{"file_storage/filelogreceiver", "file_storage/otlpoutput"},
 			"pipelines": map[string]interface{}{
 				"logs": map[string]interface{}{
-					"receivers":  []string{"filelog/registry"},
-					"processors": []string{"k8sattributes", "resourcedetection", "resource", "batch"},
+					"receivers":  []string{"filelog"},
+					"processors": []string{"batch", "k8sattributes", "filter/logging_services"},
 					"exporters":  []string{"otlphttp/victorialogs"},
 				},
 			},
@@ -426,7 +412,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							},
 							Env: corev1.EnvVarArray{
 								&corev1.EnvVarArgs{
-									Name: pulumi.String("KUBE_NODE_NAME"),
+									Name: pulumi.String("KUBERNETES_NODE_NAME"),
 									ValueFrom: &corev1.EnvVarSourceArgs{
 										FieldRef: &corev1.ObjectFieldSelectorArgs{
 											FieldPath: pulumi.String("spec.nodeName"),
