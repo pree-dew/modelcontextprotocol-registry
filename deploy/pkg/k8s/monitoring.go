@@ -170,6 +170,10 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 		},
 		Values: pulumi.Map{
 			"mode": pulumi.String("daemonset"),
+			"image": pulumi.Map{
+				"repository": pulumi.String("otel/opentelemetry-collector-contrib"),
+				"tag":        pulumi.String("0.133.0"),
+			},
 			"clusterRole": pulumi.Map{
 				"create": pulumi.Bool(true),
 				"rules": pulumi.Array{
