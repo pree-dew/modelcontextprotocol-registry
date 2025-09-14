@@ -397,6 +397,14 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 										},
 									},
 								},
+								&corev1.EnvVarArgs{
+									Name: pulumi.String("NODE_NAME"),
+									ValueFrom: &corev1.EnvVarSourceArgs{
+										FieldRef: &corev1.ObjectFieldSelectorArgs{
+											FieldPath: pulumi.String("spec.nodeName"),
+										},
+									},
+								},
 							},
 							Resources: &corev1.ResourceRequirementsArgs{
 								Requests: pulumi.StringMap{
