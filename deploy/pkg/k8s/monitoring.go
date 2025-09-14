@@ -2,12 +2,10 @@ package k8s
 
 import (
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apiextensions"
-	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v3"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
-	rbacv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/rbac/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 	"gopkg.in/yaml.v2"
@@ -128,7 +126,7 @@ func deployVictoriaLogs(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns
 	// Deploy VictoriaLogs using Helm chart
 	_, err := helm.NewChart(ctx, "victoria-logs", helm.ChartArgs{
 		Chart:     pulumi.String("victoria-logs-single"),
-		Version:   pulumi.String("0.6.4"),
+		Version:   pulumi.String("0.11.8"),
 		Namespace: ns.Metadata.Name().Elem(),
 		FetchArgs: helm.FetchArgs{
 			Repo: pulumi.String("https://victoriametrics.github.io/helm-charts/"),
@@ -160,326 +158,221 @@ func deployVictoriaLogs(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns
 	return nil
 }
 
-// deployOtelCollectorDaemonSet deploys OpenTelemetry Collector as DaemonSet
+// deployOtelCollectorDaemonSet deploys OpenTelemetry Collector using Helm chart
 func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.ProviderInfo, ns *corev1.Namespace, environment string) error {
-	// Create ServiceAccount for OTEL Collector
-	serviceAccount, err := corev1.NewServiceAccount(ctx, "otel-collector", &corev1.ServiceAccountArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name:      pulumi.String("otel-collector"),
-			Namespace: ns.Metadata.Name(),
+	// Deploy OpenTelemetry Collector using Helm chart
+	_, err := helm.NewChart(ctx, "opentelemetry-collector", helm.ChartArgs{
+		Chart:     pulumi.String("opentelemetry-collector"),
+		Version:   pulumi.String("0.133.0"),
+		Namespace: ns.Metadata.Name().Elem(),
+		FetchArgs: helm.FetchArgs{
+			Repo: pulumi.String("https://open-telemetry.github.io/opentelemetry-helm-charts"),
 		},
-	}, pulumi.Provider(cluster.Provider))
-	if err != nil {
-		return err
-	}
-
-	// Create ClusterRole for log access
-	clusterRole, err := rbacv1.NewClusterRole(ctx, "otel-collector", &rbacv1.ClusterRoleArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name: pulumi.String("otel-collector"),
-		},
-		Rules: rbacv1.PolicyRuleArray{
-			&rbacv1.PolicyRuleArgs{
-				ApiGroups: pulumi.StringArray{pulumi.String("")},
-				Resources: pulumi.StringArray{
-					pulumi.String("pods"),
-					pulumi.String("pods/log"),
-					pulumi.String("nodes"),
-					pulumi.String("namespaces"),
-				},
-				Verbs: pulumi.StringArray{
-					pulumi.String("get"),
-					pulumi.String("list"),
-					pulumi.String("watch"),
-				},
-			},
-		},
-	}, pulumi.Provider(cluster.Provider))
-	if err != nil {
-		return err
-	}
-
-	// Create ClusterRoleBinding
-	_, err = rbacv1.NewClusterRoleBinding(ctx, "otel-collector", &rbacv1.ClusterRoleBindingArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name: pulumi.String("otel-collector"),
-		},
-		RoleRef: &rbacv1.RoleRefArgs{
-			ApiGroup: pulumi.String("rbac.authorization.k8s.io"),
-			Kind:     pulumi.String("ClusterRole"),
-			Name:     clusterRole.Metadata.Name().Elem(),
-		},
-		Subjects: rbacv1.SubjectArray{
-			&rbacv1.SubjectArgs{
-				Kind:      pulumi.String("ServiceAccount"),
-				Name:      serviceAccount.Metadata.Name().Elem(),
-				Namespace: ns.Metadata.Name(),
-			},
-		},
-	}, pulumi.Provider(cluster.Provider))
-	if err != nil {
-		return err
-	}
-
-	// Create OpenTelemetry Collector configuration
-	otelConfig := map[string]interface{}{
-		"receivers": map[string]interface{}{
-			"filelog": map[string]interface{}{
-				"include":           []string{"/var/log/pods/default_mcp-registry*/*/*.log"},
-				"exclude":           []string{"/var/log/pods/*/*-collector-*/*.log"},
-				"start_at":          "end",
-				"include_file_path": true,
-				"include_file_name": false,
-				"operators": []map[string]interface{}{
-					{
-						"type":       "regex_parser",
-						"id":         "extract_metadata_from_filepath",
-						"regex":      `^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log`,
-						"parse_from": "attributes[\"log.file.path\"]",
-						"cache": map[string]interface{}{
-							"size": 128,
+		Values: pulumi.Map{
+			"mode": pulumi.String("daemonset"),
+			"clusterRole": pulumi.Map{
+				"create": pulumi.Bool(true),
+				"rules": pulumi.Array{
+					pulumi.Map{
+						"apiGroups": pulumi.StringArray{pulumi.String("")},
+						"resources": pulumi.StringArray{
+							pulumi.String("pods"),
+							pulumi.String("pods/log"),
+							pulumi.String("nodes"),
+							pulumi.String("namespaces"),
 						},
-					},
-					{
-						"type": "move",
-						"from": "attributes.container_name",
-						"to":   "resource[\"k8s.container.name\"]",
-					},
-					{
-						"type": "move",
-						"from": "attributes.namespace",
-						"to":   "resource[\"k8s.namespace.name\"]",
-					},
-					{
-						"type": "move",
-						"from": "attributes.pod_name",
-						"to":   "resource[\"k8s.pod.name\"]",
-					},
-					{
-						"type": "move",
-						"from": "attributes.restart_count",
-						"to":   "resource[\"k8s.container.restart_count\"]",
-					},
-					{
-						"type": "move",
-						"from": "attributes.uid",
-						"to":   "resource[\"k8s.pod.uid\"]",
-					},
-				},
-			},
-		},
-		"processors": map[string]interface{}{
-			"batch": map[string]interface{}{},
-			"k8sattributes": map[string]interface{}{
-				"auth_type":   "serviceAccount",
-				"passthrough": false,
-				"filter": map[string]interface{}{
-					"node_from_env_var": "KUBERNETES_NODE_NAME",
-				},
-				"extract": map[string]interface{}{
-					"metadata": []string{
-						"k8s.pod.name",
-						"k8s.pod.uid",
-						"k8s.deployment.name",
-						"k8s.namespace.name",
-						"k8s.node.name",
-						"k8s.pod.start_time",
-						"k8s.cluster.uid",
-					},
-					"labels": []map[string]interface{}{
-						{
-							"tag_name": "app",
-							"key":      "app",
-							"from":     "pod",
-						},
-					},
-				},
-				"pod_association": []map[string]interface{}{
-					{
-						"sources": []map[string]interface{}{
-							{
-								"from": "resource_attribute",
-								"name": "k8s.pod.name",
-							},
-							{
-								"from": "resource_attribute",
-								"name": "k8s.namespace.name",
-							},
+						"verbs": pulumi.StringArray{
+							pulumi.String("get"),
+							pulumi.String("list"),
+							pulumi.String("watch"),
 						},
 					},
 				},
 			},
-			"filter/logging_services": map[string]interface{}{
-				"error_mode": "ignore",
-				"logs": map[string]interface{}{
-					"log_record": []string{
-						`resource.attributes["k8s.namespace.name"] != "default"`,
-					},
-				},
-			},
-		},
-		"exporters": map[string]interface{}{
-			"otlphttp/victorialogs": map[string]interface{}{
-				"logs_endpoint": "http://victoria-logs-victoria-logs-single-server:9428/insert/opentelemetry/v1/logs",
-				"headers": map[string]interface{}{
-					"VL-Msg-Field":     "body",
-					"VL-Time-Field":    "timestamp",
-					"VL-Stream-Fields": "k8s.namespace.name,k8s.pod.name,k8s.container.name,log.iostream",
-				},
-				"timeout": "10s",
-				"retry_on_failure": map[string]interface{}{
-					"enabled":          true,
-					"initial_interval": "5s",
-					"max_interval":     "30s",
-					"max_elapsed_time": "300s",
-				},
-				"sending_queue": map[string]interface{}{
-					"enabled":       true,
-					"num_consumers": 10,
-					"queue_size":    50,
-				},
-			},
-		},
-		"service": map[string]interface{}{
-			"pipelines": map[string]interface{}{
-				"logs": map[string]interface{}{
-					"receivers":  []string{"filelog"},
-					"processors": []string{"batch", "k8sattributes", "filter/logging_services"},
-					"exporters":  []string{"otlphttp/victorialogs"},
-				},
-			},
-		},
-	}
-
-	otelConfigYAML, _ := yaml.Marshal(otelConfig)
-	otelConfigMap, err := corev1.NewConfigMap(ctx, "otel-collector-config", &corev1.ConfigMapArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name:      pulumi.String("otel-collector-config"),
-			Namespace: ns.Metadata.Name(),
-		},
-		Data: pulumi.StringMap{
-			"otel-collector-config.yaml": pulumi.String(string(otelConfigYAML)),
-		},
-	}, pulumi.Provider(cluster.Provider))
-	if err != nil {
-		return err
-	}
-
-	// Deploy OpenTelemetry Collector DaemonSet
-	_, err = appsv1.NewDaemonSet(ctx, "otel-collector", &appsv1.DaemonSetArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name:      pulumi.String("otel-collector"),
-			Namespace: ns.Metadata.Name(),
-			Labels: pulumi.StringMap{
-				"app":         pulumi.String("otel-collector"),
-				"environment": pulumi.String(environment),
-			},
-		},
-		Spec: &appsv1.DaemonSetSpecArgs{
-			Selector: &metav1.LabelSelectorArgs{
-				MatchLabels: pulumi.StringMap{
-					"app": pulumi.String("otel-collector"),
-				},
-			},
-			Template: &corev1.PodTemplateSpecArgs{
-				Metadata: &metav1.ObjectMetaArgs{
-					Labels: pulumi.StringMap{
-						"app": pulumi.String("otel-collector"),
-					},
-				},
-				Spec: &corev1.PodSpecArgs{
-					ServiceAccountName: serviceAccount.Metadata.Name(),
-					Containers: corev1.ContainerArray{
-						&corev1.ContainerArgs{
-							Name:  pulumi.String("otel-collector"),
-							Image: pulumi.String("otel/opentelemetry-collector-contrib:0.95.0"),
-							Args: pulumi.StringArray{
-								pulumi.String("--config=/etc/otelcol-contrib/otel-collector-config.yaml"),
-							},
-							Ports: corev1.ContainerPortArray{
-								&corev1.ContainerPortArgs{
-									Name:          pulumi.String("otlp"),
-									ContainerPort: pulumi.Int(4317),
-									Protocol:      pulumi.String("TCP"),
-								},
-								&corev1.ContainerPortArgs{
-									Name:          pulumi.String("otlp-http"),
-									ContainerPort: pulumi.Int(4318),
-									Protocol:      pulumi.String("TCP"),
+			"config": pulumi.Map{
+				"receivers": pulumi.Map{
+					"filelog": pulumi.Map{
+						"include":           pulumi.StringArray{pulumi.String("/var/log/pods/default_mcp-registry*/*/*.log")},
+						"exclude":           pulumi.StringArray{pulumi.String("/var/log/pods/*/*-collector-*/*.log")},
+						"start_at":          pulumi.String("end"),
+						"include_file_path": pulumi.Bool(true),
+						"include_file_name": pulumi.Bool(false),
+						"operators": pulumi.Array{
+							pulumi.Map{
+								"type":       pulumi.String("regex_parser"),
+								"id":         pulumi.String("extract_metadata_from_filepath"),
+								"regex":      pulumi.String(`^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log`),
+								"parse_from": pulumi.String("attributes[\"log.file.path\"]"),
+								"cache": pulumi.Map{
+									"size": pulumi.Int(128),
 								},
 							},
-							Env: corev1.EnvVarArray{
-								&corev1.EnvVarArgs{
-									Name: pulumi.String("KUBERNETES_NODE_NAME"),
-									ValueFrom: &corev1.EnvVarSourceArgs{
-										FieldRef: &corev1.ObjectFieldSelectorArgs{
-											FieldPath: pulumi.String("spec.nodeName"),
-										},
+							pulumi.Map{
+								"type": pulumi.String("move"),
+								"from": pulumi.String("attributes.container_name"),
+								"to":   pulumi.String("resource[\"k8s.container.name\"]"),
+							},
+							pulumi.Map{
+								"type": pulumi.String("move"),
+								"from": pulumi.String("attributes.namespace"),
+								"to":   pulumi.String("resource[\"k8s.namespace.name\"]"),
+							},
+							pulumi.Map{
+								"type": pulumi.String("move"),
+								"from": pulumi.String("attributes.pod_name"),
+								"to":   pulumi.String("resource[\"k8s.pod.name\"]"),
+							},
+							pulumi.Map{
+								"type": pulumi.String("move"),
+								"from": pulumi.String("attributes.restart_count"),
+								"to":   pulumi.String("resource[\"k8s.container.restart_count\"]"),
+							},
+							pulumi.Map{
+								"type": pulumi.String("move"),
+								"from": pulumi.String("attributes.uid"),
+								"to":   pulumi.String("resource[\"k8s.pod.uid\"]"),
+							},
+						},
+					},
+				},
+				"processors": pulumi.Map{
+					"batch": pulumi.Map{},
+					"k8sattributes": pulumi.Map{
+						"auth_type":   pulumi.String("serviceAccount"),
+						"passthrough": pulumi.Bool(false),
+						"filter": pulumi.Map{
+							"node_from_env_var": pulumi.String("KUBERNETES_NODE_NAME"),
+						},
+						"extract": pulumi.Map{
+							"metadata": pulumi.StringArray{
+								pulumi.String("k8s.pod.name"),
+								pulumi.String("k8s.pod.uid"),
+								pulumi.String("k8s.deployment.name"),
+								pulumi.String("k8s.namespace.name"),
+								pulumi.String("k8s.node.name"),
+								pulumi.String("k8s.pod.start_time"),
+								pulumi.String("k8s.cluster.uid"),
+							},
+							"labels": pulumi.Array{
+								pulumi.Map{
+									"tag_name": pulumi.String("app"),
+									"key":      pulumi.String("app"),
+									"from":     pulumi.String("pod"),
+								},
+							},
+						},
+						"pod_association": pulumi.Array{
+							pulumi.Map{
+								"sources": pulumi.Array{
+									pulumi.Map{
+										"from": pulumi.String("resource_attribute"),
+										"name": pulumi.String("k8s.pod.name"),
+									},
+									pulumi.Map{
+										"from": pulumi.String("resource_attribute"),
+										"name": pulumi.String("k8s.namespace.name"),
 									},
 								},
 							},
-							Resources: &corev1.ResourceRequirementsArgs{
-								Requests: pulumi.StringMap{
-									"memory": pulumi.String("200Mi"),
-									"cpu":    pulumi.String("100m"),
-								},
-								Limits: pulumi.StringMap{
-									"memory": pulumi.String("400Mi"),
-									"cpu":    pulumi.String("200m"),
-								},
-							},
-							VolumeMounts: corev1.VolumeMountArray{
-								&corev1.VolumeMountArgs{
-									Name:      pulumi.String("config"),
-									MountPath: pulumi.String("/etc/otelcol-contrib/otel-collector-config.yaml"),
-									SubPath:   pulumi.String("otel-collector-config.yaml"),
-									ReadOnly:  pulumi.Bool(true),
-								},
-								&corev1.VolumeMountArgs{
-									Name:      pulumi.String("varlogpods"),
-									MountPath: pulumi.String("/var/log/pods"),
-									ReadOnly:  pulumi.Bool(true),
-								},
-								&corev1.VolumeMountArgs{
-									Name:      pulumi.String("varlibdockercontainers"),
-									MountPath: pulumi.String("/var/lib/docker/containers"),
-									ReadOnly:  pulumi.Bool(true),
-								},
+						},
+					},
+					"filter/logging_services": pulumi.Map{
+						"error_mode": pulumi.String("ignore"),
+						"logs": pulumi.Map{
+							"log_record": pulumi.StringArray{
+								pulumi.String(`resource.attributes["k8s.namespace.name"] != "default"`),
 							},
 						},
 					},
-					Volumes: corev1.VolumeArray{
-						&corev1.VolumeArgs{
-							Name: pulumi.String("config"),
-							ConfigMap: &corev1.ConfigMapVolumeSourceArgs{
-								Name: otelConfigMap.Metadata.Name(),
-							},
+				},
+				"exporters": pulumi.Map{
+					"otlphttp/victorialogs": pulumi.Map{
+						"logs_endpoint": pulumi.String("http://victoria-logs-victoria-logs-single-server:9428/insert/opentelemetry/v1/logs"),
+						"headers": pulumi.Map{
+							"VL-Msg-Field":     pulumi.String("body"),
+							"VL-Time-Field":    pulumi.String("timestamp"),
+							"VL-Stream-Fields": pulumi.String("k8s.namespace.name,k8s.pod.name,k8s.container.name,log.iostream"),
 						},
-						&corev1.VolumeArgs{
-							Name: pulumi.String("varlogpods"),
-							HostPath: &corev1.HostPathVolumeSourceArgs{
-								Path: pulumi.String("/var/log/pods"),
-							},
+						"timeout": pulumi.String("10s"),
+						"retry_on_failure": pulumi.Map{
+							"enabled":          pulumi.Bool(true),
+							"initial_interval": pulumi.String("5s"),
+							"max_interval":     pulumi.String("30s"),
+							"max_elapsed_time": pulumi.String("300s"),
 						},
-						&corev1.VolumeArgs{
-							Name: pulumi.String("varlibdockercontainers"),
-							HostPath: &corev1.HostPathVolumeSourceArgs{
-								Path: pulumi.String("/var/lib/docker/containers"),
-							},
-						},
-					},
-					Tolerations: corev1.TolerationArray{
-						&corev1.TolerationArgs{
-							Key:      pulumi.String("node-role.kubernetes.io/master"),
-							Operator: pulumi.String("Exists"),
-							Effect:   pulumi.String("NoSchedule"),
-						},
-						&corev1.TolerationArgs{
-							Key:      pulumi.String("node-role.kubernetes.io/control-plane"),
-							Operator: pulumi.String("Exists"),
-							Effect:   pulumi.String("NoSchedule"),
+						"sending_queue": pulumi.Map{
+							"enabled":       pulumi.Bool(true),
+							"num_consumers": pulumi.Int(10),
+							"queue_size":    pulumi.Int(50),
 						},
 					},
+				},
+				"service": pulumi.Map{
+					"pipelines": pulumi.Map{
+						"logs": pulumi.Map{
+							"receivers":  pulumi.StringArray{pulumi.String("filelog")},
+							"processors": pulumi.StringArray{pulumi.String("batch"), pulumi.String("k8sattributes"), pulumi.String("filter/logging_services")},
+							"exporters":  pulumi.StringArray{pulumi.String("otlphttp/victorialogs")},
+						},
+					},
+				},
+			},
+			"extraVolumes": pulumi.Array{
+				pulumi.Map{
+					"name": pulumi.String("varlogpods"),
+					"hostPath": pulumi.Map{
+						"path": pulumi.String("/var/log/pods"),
+					},
+				},
+				pulumi.Map{
+					"name": pulumi.String("varlibdockercontainers"),
+					"hostPath": pulumi.Map{
+						"path": pulumi.String("/var/lib/docker/containers"),
+					},
+				},
+			},
+			"extraVolumeMounts": pulumi.Array{
+				pulumi.Map{
+					"name":      pulumi.String("varlogpods"),
+					"mountPath": pulumi.String("/var/log/pods"),
+					"readOnly":  pulumi.Bool(true),
+				},
+				pulumi.Map{
+					"name":      pulumi.String("varlibdockercontainers"),
+					"mountPath": pulumi.String("/var/lib/docker/containers"),
+					"readOnly":  pulumi.Bool(true),
+				},
+			},
+			"extraEnvs": pulumi.Array{
+				pulumi.Map{
+					"name": pulumi.String("KUBERNETES_NODE_NAME"),
+					"valueFrom": pulumi.Map{
+						"fieldRef": pulumi.Map{
+							"fieldPath": pulumi.String("spec.nodeName"),
+						},
+					},
+				},
+			},
+			"resources": pulumi.Map{
+				"requests": pulumi.Map{
+					"memory": pulumi.String("200Mi"),
+					"cpu":    pulumi.String("100m"),
+				},
+				"limits": pulumi.Map{
+					"memory": pulumi.String("400Mi"),
+					"cpu":    pulumi.String("200m"),
+				},
+			},
+			"tolerations": pulumi.Array{
+				pulumi.Map{
+					"key":      pulumi.String("node-role.kubernetes.io/master"),
+					"operator": pulumi.String("Exists"),
+					"effect":   pulumi.String("NoSchedule"),
+				},
+				pulumi.Map{
+					"key":      pulumi.String("node-role.kubernetes.io/control-plane"),
+					"operator": pulumi.String("Exists"),
+					"effect":   pulumi.String("NoSchedule"),
 				},
 			},
 		},
