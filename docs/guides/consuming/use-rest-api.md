@@ -20,7 +20,7 @@ See the [interactive API documentation](https://registry.modelcontextprotocol.io
 ## Building a subregistry  
 **Create enhanced registries** - ETL official registry data and add your own metadata like ratings, security scans, or compatibility info.
 
-For now we recommend scraping the `GET /v0/servers` endpoint on some regular basis. In the future we might provide a filter for updated_at ([#291](https://github.com/modelcontextprotocol/registry/issues/291)) to get only recently changed servers.
+For now we recommend scraping the `GET /v0/servers` endpoint on some regular basis. In the future we might provide a filter for updatedAt ([#291](https://github.com/modelcontextprotocol/registry/issues/291)) to get only recently changed servers.
 
 Servers are generally immutable, except for the `status` field which can be updated to `deleted` (among other states). For these packages, we recommend you also update the status field to `deleted` or remove the package from your registry quickly. This is because this status generally indicates it has violated our permissive [moderation guidelines](../administration/moderation-guidelines.md), suggesting it is illegal, malware or spam.
 

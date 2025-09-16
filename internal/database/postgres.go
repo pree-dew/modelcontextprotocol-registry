@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
 
@@ -94,7 +95,7 @@ func (db *PostgreSQL) List(
 			argIndex++
 		}
 		if filter.UpdatedSince != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("(value->'_meta'->'io.modelcontextprotocol.registry/official'->>'updated_at')::timestamp > $%d", argIndex))
+			whereConditions = append(whereConditions, fmt.Sprintf("(value->'_meta'->'io.modelcontextprotocol.registry/official'->>'updatedAt')::timestamp > $%d", argIndex))
 			args = append(args, *filter.UpdatedSince)
 			argIndex++
 		}
@@ -109,7 +110,7 @@ func (db *PostgreSQL) List(
 			argIndex++
 		}
 		if filter.IsLatest != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("(value->'_meta'->'io.modelcontextprotocol.registry/official'->>'is_latest')::boolean = $%d", argIndex))
+			whereConditions = append(whereConditions, fmt.Sprintf("(value->'_meta'->'io.modelcontextprotocol.registry/official'->>'isLatest')::boolean = $%d", argIndex))
 			args = append(args, *filter.IsLatest)
 			argIndex++
 		}
@@ -221,8 +222,8 @@ func (db *PostgreSQL) GetByServerID(ctx context.Context, serverID string) (*apiv
 	query := `
 		SELECT value
 		FROM servers
-		WHERE (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'serverId') = $1 AND (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'is_latest')::boolean = true
-		ORDER BY (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'published_at')::timestamp DESC
+		WHERE (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'serverId') = $1 AND (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'isLatest')::boolean = true
+		ORDER BY (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'publishedAt')::timestamp DESC
 		LIMIT 1
 	`
 
@@ -289,7 +290,7 @@ func (db *PostgreSQL) GetAllVersionsByServerID(ctx context.Context, serverID str
 		SELECT value
 		FROM servers
 		WHERE (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'serverId') = $1
-		ORDER BY (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'published_at')::timestamp DESC
+		ORDER BY (value->'_meta'->'io.modelcontextprotocol.registry/official'->>'publishedAt')::timestamp DESC
 	`
 
 	rows, err := db.pool.Query(ctx, query, serverID)

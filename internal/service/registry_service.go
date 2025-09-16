@@ -190,7 +190,7 @@ func (s *registryServiceImpl) Publish(req apiv0.ServerJSON) (*apiv0.ServerJSON, 
 			existingLatestVersionID = existingLatest.Meta.Official.VersionID
 		}
 		if existingLatestVersionID != "" {
-			// Update the existing server to set is_latest = false
+			// Update the existing server to set isLatest = false
 			existingLatest.Meta.Official.IsLatest = false
 			existingLatest.Meta.Official.UpdatedAt = time.Now()
 			if _, err := s.db.UpdateServer(ctx, existingLatestVersionID, existingLatest); err != nil {

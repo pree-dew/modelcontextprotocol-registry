@@ -10,9 +10,9 @@ import (
 type RegistryExtensions struct {
 	ServerID    string    `json:"serverId"`  // Consistent ID across all versions of a server
 	VersionID   string    `json:"versionId"` // Unique ID for this specific version
-	PublishedAt time.Time `json:"published_at"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
-	IsLatest    bool      `json:"is_latest"`
+	PublishedAt time.Time `json:"publishedAt"`
+	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
+	IsLatest    bool      `json:"isLatest"`
 }
 
 // ServerListResponse represents the paginated server list response

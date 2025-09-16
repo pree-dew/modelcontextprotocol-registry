@@ -313,7 +313,7 @@ func (db *MemoryDB) matchesFilter(entry *apiv0.ServerJSON, filter *ServerFilter)
 		}
 	}
 
-	// Check is_latest filter
+	// Check isLatest filter
 	if filter.IsLatest != nil {
 		if entry.Meta == nil || entry.Meta.Official == nil {
 			return false
