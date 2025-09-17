@@ -171,6 +171,25 @@ func TestValidate(t *testing.T) {
 			},
 			expectedError: validators.ErrVersionLooksLikeRange.Error(),
 		},
+		// Server name validation - multiple slashes
+		{
+			name: "server name with two slashes",
+			serverDetail: apiv0.ServerJSON{
+				Name:        "com.example/server/path",
+				Description: "A test server",
+				Version:     "1.0.0",
+			},
+			expectedError: validators.ErrMultipleSlashesInServerName.Error(),
+		},
+		{
+			name: "server name with three slashes",
+			serverDetail: apiv0.ServerJSON{
+				Name:        "com.example/server/path/deep",
+				Description: "A test server",
+				Version:     "1.0.0",
+			},
+			expectedError: validators.ErrMultipleSlashesInServerName.Error(),
+		},
 		{
 			name: "valid server detail with all fields",
 			serverDetail: apiv0.ServerJSON{
@@ -847,17 +866,96 @@ func TestValidate_ServerNameFormat(t *testing.T) {
 			errorMsg:    "non-empty namespace and name parts",
 		},
 		{
-			name: "multiple slashes - uses first as separator",
+			name: "multiple slashes - should be rejected",
 			serverDetail: apiv0.ServerJSON{
 				Name: "com.example/server/path",
 			},
-			expectError: false,
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validators.ValidateServerJSON(&tt.serverDetail)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidate_MultipleSlashesInServerName(t *testing.T) {
+	tests := []struct {
+		name         string
+		serverName   string
+		expectError  bool
+		errorMsg     string
+	}{
+		{
+			name:        "single slash - valid",
+			serverName:  "com.example/my-server",
+			expectError: false,
+		},
+		{
+			name:        "two slashes - invalid",
+			serverName:  "com.example/my-server/extra",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+		{
+			name:        "three slashes - invalid",
+			serverName:  "com.example/my/server/name",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+		{
+			name:        "many slashes - invalid",
+			serverName:  "com.example/a/b/c/d/e",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+		{
+			name:        "double slash - invalid",
+			serverName:  "com.example//server",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+		{
+			name:        "trailing slash counts as two - invalid",
+			serverName:  "com.example/server/",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+		{
+			name:        "no slash - still invalid for different reason",
+			serverName:  "com.example.server",
+			expectError: true,
+			errorMsg:    "server name must be in format 'dns-namespace/name'",
+		},
+		{
+			name:        "complex valid namespace with single slash",
+			serverName:  "com.microsoft.azure.service/webapp-server",
+			expectError: false,
+		},
+		{
+			name:        "complex namespace with multiple slashes - invalid",
+			serverName:  "com.microsoft.azure/service/webapp-server",
+			expectError: true,
+			errorMsg:    "server name cannot contain multiple slashes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverDetail := apiv0.ServerJSON{
+				Name: tt.serverName,
+			}
+			err := validators.ValidateServerJSON(&serverDetail)
 
 			if tt.expectError {
 				assert.Error(t, err)
