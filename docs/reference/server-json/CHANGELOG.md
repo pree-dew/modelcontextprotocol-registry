@@ -114,6 +114,10 @@ All JSON field names standardized to camelCase. **All existing `server.json` fil
 - [ ] Update any automation scripts that reference old field names
 - [ ] Update documentation referencing old field names
 
+#### Updated Schema Reference
+
+🔗 **Current schema**: https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json
+
 ### Changed
 - Schema version: `2025-07-09` → `2025-09-16`
 
