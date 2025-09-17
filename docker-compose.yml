@@ -43,5 +43,5 @@ services:
       interval: 1s
       retries: 30
     ports:
-      - "5433:5432"
+      - "5432:5432"
     restart: "unless-stopped"

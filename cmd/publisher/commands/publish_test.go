@@ -55,7 +55,8 @@ func TestPublishCommand_DeprecatedSchema(t *testing.T) {
 		{
 			name:        "custom schema without 2025-07-09 should pass validation",
 			schema:      "https://example.com/custom.schema.json",
-			expectError: false,
+			expectError: true,
+			errorSubstr: "deprecated schema detected",
 		},
 	}
 

@@ -37,14 +37,15 @@ func PublishCommand(args []string) error {
 		return fmt.Errorf("invalid server.json: %w", err)
 	}
 
-	// Check for deprecated 2025-07-09 schema and recommend migration
-	if strings.Contains(serverJSON.Schema, "2025-07-09") {
-		return fmt.Errorf(`deprecated schema detected.
+	// Check for deprecated schema and recommend migration
+	// Allow empty schema (will use default) but reject old schemas
+	if serverJSON.Schema != "" && !strings.Contains(serverJSON.Schema, "2025-09-16") {
+		return fmt.Errorf(`deprecated schema detected :%s.
 
-While the 2025-07-09 schema is still supported, we strongly recommend migrating to the current schema format for new servers.
+Migrate to the current schema format for new servers.
 
 📋 Migration checklist: https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/server-json/CHANGELOG.md#migration-checklist-for-publishers
-📖 Full changelog with examples: https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/server-json/CHANGELOG.md`)
+📖 Full changelog with examples: https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/server-json/CHANGELOG.md`, serverJSON.Schema)
 	}
 
 	// Load saved token
