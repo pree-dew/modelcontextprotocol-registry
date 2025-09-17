@@ -23,6 +23,7 @@ services:
       - MCP_REGISTRY_OIDC_EXTRA_CLAIMS=${MCP_REGISTRY_OIDC_EXTRA_CLAIMS:-[{"hd":"modelcontextprotocol.io"}]}
       - MCP_REGISTRY_OIDC_EDIT_PERMISSIONS=${MCP_REGISTRY_OIDC_EDIT_PERMISSIONS:-*}
       - MCP_REGISTRY_OIDC_PUBLISH_PERMISSIONS=${MCP_REGISTRY_OIDC_PUBLISH_PERMISSIONS:-*}
+      - MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION=${MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION:-true}
     ports:
       - 8080:8080
     restart: "unless-stopped"
@@ -42,5 +43,5 @@ services:
       interval: 1s
       retries: 30
     ports:
-      - "5432:5432"
+      - "5433:5432"
     restart: "unless-stopped"
