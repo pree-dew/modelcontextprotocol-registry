@@ -251,8 +251,8 @@ LABEL io.modelcontextprotocol.server.name="io.github.username/server-name"
   "name": "io.github.username/server-name", 
   "packages": [
     {
-      "registry_type": "oci",
-      "registry_base_url": "https://docker.io",
+      "registryType": "oci",
+      "registryBaseUrl": "https://docker.io",
       "identifier": "yourusername/your-mcp-server",
       "version": "1.0.0"
     }
