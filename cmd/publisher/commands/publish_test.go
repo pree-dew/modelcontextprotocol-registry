@@ -1,4 +1,4 @@
-package commands
+package commands_test
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/registry/cmd/publisher/commands"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )
@@ -24,7 +25,7 @@ func TestPublishCommand_DeprecatedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get current dir: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("Failed to change to temp dir: %v", err)
@@ -97,7 +98,7 @@ func TestPublishCommand_DeprecatedSchema(t *testing.T) {
 				t.Fatalf("Failed to write server.json: %v", err)
 			}
 
-			err = PublishCommand([]string{})
+			err = commands.PublishCommand([]string{})
 
 			if tt.expectError {
 				if err == nil {
