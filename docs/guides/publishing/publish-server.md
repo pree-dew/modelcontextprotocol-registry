@@ -24,7 +24,7 @@ By the end of this tutorial, you'll have:
 
 You can make your MCP server available in multiple ways:
 
-- **📦 Package deployment**: Published to registries (npm, PyPI, Docker Hub, etc.) and run locally by clients
+- **📦 Package deployment**: Published to registries (npm, PyPI, NuGet, Docker Hub, etc.) and run locally by clients
 - **🌐 Remote deployment**: Hosted as a web service that clients connect to directly  
 - **🔄 Hybrid deployment**: Offer both package and remote options for maximum flexibility
 
@@ -238,18 +238,36 @@ LABEL io.modelcontextprotocol.server.name="io.github.username/server-name"
 ```
 
 ### How It Works
-- Registry authenticates with Docker Hub using public token
+- Registry authenticates with container registries using token-based authentication:
+  - **Docker Hub**: Uses `auth.docker.io` token service
+  - **GitHub Container Registry**: Uses `ghcr.io` token service  
 - Fetches image manifest using Docker Registry v2 API
 - Checks that `io.modelcontextprotocol.server.name` annotation matches your server name
 - Fails if annotation is missing or doesn't match
 
-### Example server.json
+### Example server.json (Docker Hub)
+```json
+{
+  "name": "io.github.username/server-name", 
+  "packages": [
+    {
+      "registry_type": "oci",
+      "registry_base_url": "https://docker.io",
+      "identifier": "yourusername/your-mcp-server",
+      "version": "1.0.0"
+    }
+  ]
+}
+```
+
+### Example server.json (GitHub Container Registry)
 ```json
 {
   "name": "io.github.username/server-name", 
   "packages": [
     {
       "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
       "identifier": "yourusername/your-mcp-server",
       "version": "1.0.0"
     }
@@ -259,7 +277,7 @@ LABEL io.modelcontextprotocol.server.name="io.github.username/server-name"
 
 The identifier is `namespace/repository`, and version is the tag and optionally digest.
 
-The official MCP registry currently only supports the official Docker registry (`https://docker.io`).
+The official MCP registry currently supports Docker Hub (`https://docker.io`) and GitHub Container Registry (`https://ghcr.io`).
 
 </details>
 

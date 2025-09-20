@@ -402,6 +402,12 @@ func parseServerName(serverJSON apiv0.ServerJSON) (string, error) {
 		return "", fmt.Errorf("server name must be in format 'dns-namespace/name' (e.g., 'com.example.api/server')")
 	}
 
+	// Check for multiple slashes - reject if found
+	slashCount := strings.Count(name, "/")
+	if slashCount > 1 {
+		return "", ErrMultipleSlashesInServerName
+	}
+
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", fmt.Errorf("server name must be in format 'dns-namespace/name' with non-empty namespace and name parts")

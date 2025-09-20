@@ -224,6 +224,134 @@ func TestPublishEndpoint(t *testing.T) {
 			setupRegistryService: func(_ service.RegistryService) {},
 			expectedStatus:       http.StatusOK,
 		},
+		{
+			name: "invalid server name - multiple slashes (two slashes)",
+			requestBody: apiv0.ServerJSON{
+				Name:        "com.example/server/path",
+				Description: "Server with multiple slashes in name",
+				Version:     "1.0.0",
+				Repository: model.Repository{
+					URL:    "https://github.com/example/test-server",
+					Source: "github",
+					ID:     "example/test-server",
+				},
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
+		{
+			name: "invalid server name - multiple slashes (three slashes)",
+			requestBody: apiv0.ServerJSON{
+				Name:        "org.company/dept/team/project",
+				Description: "Server with three slashes in name",
+				Version:     "1.0.0",
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
+		{
+			name: "invalid server name - consecutive slashes",
+			requestBody: apiv0.ServerJSON{
+				Name:        "com.example//double-slash",
+				Description: "Server with consecutive slashes",
+				Version:     "1.0.0",
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
+		{
+			name: "invalid server name - URL-like path",
+			requestBody: apiv0.ServerJSON{
+				Name:        "com.example/servers/v1/api",
+				Description: "Server with URL-like path structure",
+				Version:     "1.0.0",
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
+		{
+			name: "invalid server name - many slashes",
+			requestBody: apiv0.ServerJSON{
+				Name:        "a/b/c/d/e/f",
+				Description: "Server with many slashes",
+				Version:     "1.0.0",
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
+		{
+			name: "invalid server name - with packages and remotes",
+			requestBody: apiv0.ServerJSON{
+				Name:        "com.example/test/server/v2",
+				Description: "Complex server with invalid name",
+				Version:     "2.0.0",
+				Repository: model.Repository{
+					URL:    "https://github.com/example/test-server",
+					Source: "github",
+					ID:     "example/test-server",
+				},
+				Packages: []model.Package{
+					{
+						RegistryType: model.RegistryTypeNPM,
+						Identifier:   "test-package",
+						Version:      "2.0.0",
+						Transport: model.Transport{
+							Type: model.TransportTypeStdio,
+						},
+					},
+				},
+				Remotes: []model.Transport{
+					{
+						Type: model.TransportTypeStreamableHTTP,
+						URL:  "https://example.com/api",
+					},
+				},
+			},
+			tokenClaims: &auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			},
+			setupRegistryService: func(_ service.RegistryService) {},
+			expectedStatus:       http.StatusBadRequest,
+			expectedError:        "server name cannot contain multiple slashes",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -276,6 +404,108 @@ func TestPublishEndpoint(t *testing.T) {
 			}
 
 			// No mock expectations to verify
+		})
+	}
+}
+
+// TestPublishEndpoint_MultipleSlashesEdgeCases tests additional edge cases for multi-slash validation
+func TestPublishEndpoint_MultipleSlashesEdgeCases(t *testing.T) {
+	testSeed := make([]byte, ed25519.SeedSize)
+	_, err := rand.Read(testSeed)
+	require.NoError(t, err)
+	testConfig := &config.Config{
+		JWTPrivateKey:            hex.EncodeToString(testSeed),
+		EnableRegistryValidation: false,
+	}
+
+	testCases := []struct {
+		name           string
+		serverName     string
+		expectedStatus int
+		description    string
+	}{
+		{
+			name:           "valid - single slash",
+			serverName:     "com.example/server",
+			expectedStatus: http.StatusOK,
+			description:    "Valid server name with single slash should succeed",
+		},
+		{
+			name:           "invalid - trailing slash after valid name",
+			serverName:     "com.example/server/",
+			expectedStatus: http.StatusBadRequest,
+			description:    "Trailing slash creates multiple slashes",
+		},
+		{
+			name:           "invalid - leading and middle slash",
+			serverName:     "/com.example/server",
+			expectedStatus: http.StatusBadRequest,
+			description:    "Leading slash with middle slash",
+		},
+		{
+			name:           "invalid - file system style path",
+			serverName:     "usr/local/bin/server",
+			expectedStatus: http.StatusBadRequest,
+			description:    "File system style paths should be rejected",
+		},
+		{
+			name:           "invalid - version-like suffix",
+			serverName:     "com.example/server/v1.0.0",
+			expectedStatus: http.StatusBadRequest,
+			description:    "Version suffixes with slash should be rejected",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create registry service
+			registryService := service.NewRegistryService(database.NewMemoryDB(), testConfig)
+
+			// Create a new ServeMux and Huma API
+			mux := http.NewServeMux()
+			api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+
+			// Register the endpoint
+			v0.RegisterPublishEndpoint(api, registryService, testConfig)
+
+			// Create request body
+			requestBody := apiv0.ServerJSON{
+				Name:        tc.serverName,
+				Description: "Test server",
+				Version:     "1.0.0",
+			}
+
+			bodyBytes, err := json.Marshal(requestBody)
+			require.NoError(t, err)
+
+			// Create request
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/v0/publish", bytes.NewBuffer(bodyBytes))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			// Set auth header with permissions
+			tokenClaims := auth.JWTClaims{
+				AuthMethod: auth.MethodNone,
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
+				},
+			}
+			token, err := generateTestJWTToken(testConfig, tokenClaims)
+			require.NoError(t, err)
+			req.Header.Set("Authorization", "Bearer "+token)
+
+			// Perform request
+			rr := httptest.NewRecorder()
+			mux.ServeHTTP(rr, req)
+
+			// Assertions
+			assert.Equal(t, tc.expectedStatus, rr.Code, 
+				"%s: expected status %d, got %d", tc.description, tc.expectedStatus, rr.Code)
+
+			if tc.expectedStatus == http.StatusBadRequest {
+				assert.Contains(t, rr.Body.String(), "server name cannot contain multiple slashes",
+					"%s: should contain specific error message", tc.description)
+			}
 		})
 	}
 }
