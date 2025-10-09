@@ -232,26 +232,11 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							pulumi.Map{
 								"type":       pulumi.String("regex_parser"),
 								"id":         pulumi.String("extract_metadata_from_filepath"),
-								"regex":      pulumi.String(`^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log`),
+								"regex":      pulumi.String(`^.*\/[^_]+_[^_]+_(?P<uid>[a-f0-9\-]{36})\/[^\._]+\/(?P<restart_count>\d+)\.log`),
 								"parse_from": pulumi.String("attributes[\"log.file.path\"]"),
 								"cache": pulumi.Map{
 									"size": pulumi.Int(128),
 								},
-							},
-							pulumi.Map{
-								"type": pulumi.String("move"),
-								"from": pulumi.String("attributes.container_name"),
-								"to":   pulumi.String("resource[\"k8s.container.name\"]"),
-							},
-							pulumi.Map{
-								"type": pulumi.String("move"),
-								"from": pulumi.String("attributes.namespace"),
-								"to":   pulumi.String("resource[\"k8s.namespace.name\"]"),
-							},
-							pulumi.Map{
-								"type": pulumi.String("move"),
-								"from": pulumi.String("attributes.pod_name"),
-								"to":   pulumi.String("resource[\"k8s.pod.name\"]"),
 							},
 							pulumi.Map{
 								"type": pulumi.String("move"),
@@ -300,17 +285,19 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 								pulumi.String("k8s.deployment.name"),
 								pulumi.String("k8s.namespace.name"),
 								pulumi.String("k8s.node.name"),
-								pulumi.String("k8s.cluster.uid"),
-							},
-							"labels": pulumi.Array{
-								pulumi.Map{
-									"tag_name": pulumi.String("app"),
-									"key":      pulumi.String("app"),
-									"from":     pulumi.String("pod"),
-								},
+								pulumi.String("container.image.name"),
+								pulumi.String("container.image.tag"),
 							},
 						},
 						"pod_association": pulumi.Array{
+							pulumi.Map{
+								"sources": pulumi.Array{
+									pulumi.Map{
+										"from": pulumi.String("resource_attribute"),
+										"name": pulumi.String("k8s.pod.ip"),
+									},
+								},
+							},
 							pulumi.Map{
 								"sources": pulumi.Array{
 									pulumi.Map{
@@ -322,8 +309,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 							pulumi.Map{
 								"sources": pulumi.Array{
 									pulumi.Map{
-										"from": pulumi.String("resource_attribute"),
-										"name": pulumi.String("k8s.node.name"),
+										"from": pulumi.String("connection"),
 									},
 								},
 							},
@@ -366,7 +352,7 @@ func deployOtelCollectorDaemonSet(ctx *pulumi.Context, cluster *providers.Provid
 					"pipelines": pulumi.Map{
 						"logs": pulumi.Map{
 							"receivers":  pulumi.StringArray{pulumi.String("filelog"), pulumi.String("k8s_events")},
-							"processors": pulumi.StringArray{pulumi.String("batch")},
+							"processors": pulumi.StringArray{pulumi.String("k8sattributes"), pulumi.String("batch")},
 							"exporters":  pulumi.StringArray{pulumi.String("otlphttp/victorialogs")},
 						},
 						"metrics": pulumi.Map{
