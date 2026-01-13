@@ -3,6 +3,7 @@ package v0
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,11 +19,14 @@ import (
 
 // EditServerInput represents the input for editing a server
 type EditServerInput struct {
-	Authorization string           `header:"Authorization" doc:"Registry JWT token with edit permissions" required:"true"`
-	ServerName    string           `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
-	Version       string           `path:"version" doc:"URL-encoded version to edit" example:"1.0.0"`
-	Status        string           `query:"status" doc:"New status for the server (active, deprecated, deleted)" required:"false" enum:"active,deprecated,deleted"`
-	Body          apiv0.ServerJSON `body:""`
+	Authorization  string  `header:"Authorization" doc:"Registry JWT token with edit permissions" required:"true"`
+	ServerName     string  `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
+	Version        string  `path:"version" doc:"URL-encoded version to edit" example:"1.0.0"`
+	Status         string  `query:"status" doc:"New status for the server (active, deprecated, yanked)" required:"false" enum:"active,deprecated,yanked"`
+	StatusMessage  string `query:"status_message" doc:"Optional message explaining the status change" required:"false"`
+	AlternativeUrl string `query:"alternative_url" doc:"Optional URL to alternative/replacement server" required:"false"`
+	NewName        string `query:"new_name" doc:"Optional new server name when server has been renamed (machine-readable)" required:"false"`
+	Body           apiv0.ServerJSON `body:""`
 }
 
 // RegisterEditEndpoints registers the edit endpoint with a custom path prefix
@@ -91,28 +95,76 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 			return nil, huma.Error400BadRequest("Version in request body must match URL path parameter")
 		}
 
+		// Validate new_name if provided (check this before status transition validation)
+		if input.NewName != "" {
+			// Validation: new_name can only be used with deprecated or yanked status
+			if input.Status != string(model.StatusDeprecated) && input.Status != string(model.StatusYanked) {
+				return nil, huma.Error400BadRequest("new_name can only be used with deprecated or yanked status")
+			}
+
+			// Validation: Check that the new server exists
+			newServer, err := registry.GetServerByName(ctx, input.NewName)
+			if err != nil {
+				if errors.Is(err, database.ErrNotFound) {
+					return nil, huma.Error400BadRequest(fmt.Sprintf("New server '%s' does not exist in the registry", input.NewName))
+				}
+				return nil, huma.Error500InternalServerError("Failed to validate new server name", err)
+			}
+
+			// Validation: Check that the user has edit permissions for the new server
+			if !jwtManager.HasPermission(newServer.Server.Name, auth.PermissionActionEdit, claims.Permissions) {
+				return nil, huma.Error403Forbidden(fmt.Sprintf("You do not have permissions for the new server '%s'", input.NewName))
+			}
+		}
+
 		// Handle status changes with proper permission validation
 		if input.Status != "" {
 			newStatus := model.Status(input.Status)
 
-			// Prevent undeleting servers - once deleted, they stay deleted
-			if currentServer.Meta.Official != nil &&
-				currentServer.Meta.Official.Status == model.StatusDeleted &&
-				newStatus != model.StatusDeleted {
-				return nil, huma.Error400BadRequest("Cannot change status of deleted server. Deleted servers cannot be undeleted.")
+			// Validate status transition is allowed
+			if currentServer.Meta.Official != nil {
+				currentStatus := currentServer.Meta.Official.Status
+				if !isValidStatusTransition(currentStatus, newStatus) {
+					return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
+				}
 			}
 
 			// For now, only allow status changes for admins
 			// Future: Implement logic to allow server authors to change active <-> deprecated
-			// but only admins can set to deleted
+			// but only admins can set to yanked
 		}
 
 		// Update the server using the service
-		var statusPtr *string
+		var statusChange *service.StatusChangeRequest
 		if input.Status != "" {
-			statusPtr = &input.Status
+			var statusMessage *string
+			var alternativeUrl *string
+			var newName *string
+
+			newStatus := model.Status(input.Status)
+
+			// When transitioning to active status, clear status_message, alternative_url, and new_name
+			if newStatus != model.StatusActive {
+				if input.StatusMessage != "" {
+					statusMessage = &input.StatusMessage
+				}
+				if input.AlternativeUrl != "" {
+					alternativeUrl = &input.AlternativeUrl
+				}
+				if input.NewName != "" {
+					newName = &input.NewName
+				}
+			}
+			// If transitioning to active, statusMessage, alternativeUrl, and newName remain nil
+
+			statusChange = &service.StatusChangeRequest{
+				NewStatus:      newStatus,
+				StatusMessage:  statusMessage,
+				AlternativeUrl: alternativeUrl,
+				NewName:        newName,
+			}
 		}
-		updatedServer, err := registry.UpdateServer(ctx, serverName, version, &input.Body, statusPtr)
+		updatedServer, err := registry.UpdateServer(ctx, serverName, version, &input.Body, statusChange)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
@@ -124,4 +176,25 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 			Body: *updatedServer,
 		}, nil
 	})
+}
+
+// isValidStatusTransition checks if a status transition is allowed
+// Allowed transitions:
+// - active ↔ deprecated ↔ yanked (all bidirectional transitions allowed)
+// - Same status transitions are NOT allowed (no-op)
+func isValidStatusTransition(currentStatus, newStatus model.Status) bool {
+	// Same status transition is not allowed (no-op)
+	if currentStatus == newStatus {
+		return false
+	}
+
+	// All transitions between active, deprecated, and yanked are allowed
+	validStatuses := map[model.Status]bool{
+		model.StatusActive:     true,
+		model.StatusDeprecated: true,
+		model.StatusYanked:     true,
+	}
+
+	// Both current and new status must be valid
+	return validStatuses[currentStatus] && validStatuses[newStatus]
 }

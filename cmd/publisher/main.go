@@ -43,6 +43,8 @@ func main() {
 		err = commands.LogoutCommand()
 	case "publish":
 		err = commands.PublishCommand(os.Args[2:])
+	case "status":
+		err = commands.StatusCommand(os.Args[2:])
 	case "--version", "-v", "version":
 		log.Printf("mcp-publisher %s (commit: %s, built: %s)", Version, GitCommit, BuildTime)
 		return
@@ -71,6 +73,7 @@ func printUsage() {
 	_, _ = fmt.Fprintln(os.Stdout, "  login         Authenticate with the registry")
 	_, _ = fmt.Fprintln(os.Stdout, "  logout        Clear saved authentication")
 	_, _ = fmt.Fprintln(os.Stdout, "  publish       Publish server.json to the registry")
+	_, _ = fmt.Fprintln(os.Stdout, "  status        Update the status of a server version")
 	_, _ = fmt.Fprintln(os.Stdout)
 	_, _ = fmt.Fprintln(os.Stdout, "Use 'mcp-publisher <command> --help' for more information about a command.")
 }
@@ -124,6 +127,46 @@ func printCommandHelp(command string) {
 		_, _ = fmt.Fprintln(os.Stdout, "  server.json   Path to the server.json file (default: ./server.json)")
 		_, _ = fmt.Fprintln(os.Stdout)
 		_, _ = fmt.Fprintln(os.Stdout, "You must be logged in before publishing. Run 'mcp-publisher login' first.")
+
+	case "status":
+		_, _ = fmt.Fprintln(os.Stdout, "Update the status of a server version")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "Usage:")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status <server-name> [version] --status <active|deprecated|yanked> [flags]")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "Arguments:")
+		_, _ = fmt.Fprintln(os.Stdout, "  server-name   Full server name (e.g., io.github.user/my-server)")
+		_, _ = fmt.Fprintln(os.Stdout, "  version       Server version to update (required unless --all-versions is set)")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "Flags:")
+		_, _ = fmt.Fprintln(os.Stdout, "  --status string            New status: active, deprecated, or yanked (required)")
+		_, _ = fmt.Fprintln(os.Stdout, "  --message string           Optional message explaining the status change")
+		_, _ = fmt.Fprintln(os.Stdout, "  --alternative-url string   Optional URL to alternative/replacement server")
+		_, _ = fmt.Fprintln(os.Stdout, "  --new-name string          Optional new server name when server has been renamed")
+		_, _ = fmt.Fprintln(os.Stdout, "  --all-versions             Apply status change to all versions of the server")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "Examples:")
+		_, _ = fmt.Fprintln(os.Stdout, "  # Deprecate a specific version")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status io.github.user/my-server 1.0.0 --status deprecated \\")
+		_, _ = fmt.Fprintln(os.Stdout, "    --message \"Please upgrade to 2.0.0\"")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "  # Yank a version with security issues")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status io.github.user/my-server 1.0.0 --status yanked \\")
+		_, _ = fmt.Fprintln(os.Stdout, "    --message \"Critical security vulnerability\"")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "  # Restore a version to active")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status io.github.user/my-server 1.0.0 --status active")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "  # Deprecate all versions")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status io.github.user/my-server --all-versions --status deprecated \\")
+		_, _ = fmt.Fprintln(os.Stdout, "    --message \"Project archived\"")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "  # Deprecate with new name (rename)")
+		_, _ = fmt.Fprintln(os.Stdout, "  mcp-publisher status io.github.user/my-server --all-versions --status deprecated \\")
+		_, _ = fmt.Fprintln(os.Stdout, "    --new-name \"io.github.company/my-server\" \\")
+		_, _ = fmt.Fprintln(os.Stdout, "    --message \"Moved to company organization\"")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "You must be logged in before updating status. Run 'mcp-publisher login' first.")
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)

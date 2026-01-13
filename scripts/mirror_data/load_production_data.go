@@ -101,7 +101,7 @@ func main() {
 			COUNT(CASE WHEN value->>'status' = 'null' THEN 1 END) as string_null_status,
 			COUNT(CASE WHEN value->>'status' = 'active' THEN 1 END) as active_status,
 			COUNT(CASE WHEN value->>'status' = 'deprecated' THEN 1 END) as deprecated_status,
-			COUNT(CASE WHEN value->>'status' = 'deleted' THEN 1 END) as deleted_status
+			COUNT(CASE WHEN value->>'status' = 'yanked' THEN 1 END) as yanked_status
 		FROM servers
 	`)
 	if err != nil {
@@ -110,8 +110,8 @@ func main() {
 	defer rows.Close()
 
 	if rows.Next() {
-		var total, nullStatus, emptyStatus, stringNullStatus, activeStatus, deprecatedStatus, deletedStatus int
-		rows.Scan(&total, &nullStatus, &emptyStatus, &stringNullStatus, &activeStatus, &deprecatedStatus, &deletedStatus)
+		var total, nullStatus, emptyStatus, stringNullStatus, activeStatus, deprecatedStatus, yankedStatus int
+		rows.Scan(&total, &nullStatus, &emptyStatus, &stringNullStatus, &activeStatus, &deprecatedStatus, &yankedStatus)
 
 		fmt.Printf("  Total servers: %d\n", total)
 		fmt.Printf("  NULL status: %d\n", nullStatus)
@@ -119,8 +119,8 @@ func main() {
 		fmt.Printf("  'null' string status: %d\n", stringNullStatus)
 		fmt.Printf("  'active' status: %d\n", activeStatus)
 		fmt.Printf("  'deprecated' status: %d\n", deprecatedStatus)
-		fmt.Printf("  'deleted' status: %d\n", deletedStatus)
-		fmt.Printf("  Other/Invalid: %d\n", total-nullStatus-emptyStatus-stringNullStatus-activeStatus-deprecatedStatus-deletedStatus)
+		fmt.Printf("  'yanked' status: %d\n", yankedStatus)
+		fmt.Printf("  Other/Invalid: %d\n", total-nullStatus-emptyStatus-stringNullStatus-activeStatus-deprecatedStatus-yankedStatus)
 	}
 
 	// Print sample servers with no status

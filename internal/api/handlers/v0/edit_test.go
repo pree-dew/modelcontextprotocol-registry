@@ -71,23 +71,25 @@ func TestEditServerEndpoint(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Create a deleted server for undelete testing
-	deletedServer := &apiv0.ServerJSON{
+	// Create a yanked server for unyank testing
+	yankedServer := &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
-		Name:        "io.github.testuser/deleted-server",
-		Description: "Server that was deleted",
+		Name:        "io.github.testuser/yanked-server",
+		Description: "Server that was yanked",
 		Version:     "1.0.0",
 		Repository: &model.Repository{
-			URL:    "https://github.com/testuser/deleted-server",
+			URL:    "https://github.com/testuser/yanked-server",
 			Source: "github",
-			ID:     "testuser/deleted-server",
+			ID:     "testuser/yanked-server",
 		},
 	}
-	_, err = registryService.CreateServer(context.Background(), deletedServer)
+	_, err = registryService.CreateServer(context.Background(), yankedServer)
 	require.NoError(t, err)
 
-	// Set the server to deleted status
-	_, err = registryService.UpdateServer(context.Background(), deletedServer.Name, deletedServer.Version, deletedServer, stringPtr(string(model.StatusDeleted)))
+	// Set the server to yanked status
+	_, err = registryService.UpdateServer(context.Background(), yankedServer.Name, yankedServer.Version, yankedServer, &service.StatusChangeRequest{
+		NewStatus: model.StatusYanked,
+	})
 	require.NoError(t, err)
 
 	// Create a server with build metadata for URL encoding test
@@ -105,6 +107,141 @@ func TestEditServerEndpoint(t *testing.T) {
 	_, err = registryService.CreateServer(context.Background(), buildMetadataServer)
 	require.NoError(t, err)
 
+	// Create a server for testing status transitions
+	transitionTestServer := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/transition-test-server",
+		Description: "Server for testing status transitions",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/transition-test-server",
+			Source: "github",
+			ID:     "testuser/transition-test-server",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), transitionTestServer)
+	require.NoError(t, err)
+
+	// Create servers for newName validation testing
+	newServerForRename := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/new-server",
+		Description: "New server to rename to",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/new-server",
+			Source: "github",
+			ID:     "testuser/new-server",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newServerForRename)
+	require.NoError(t, err)
+
+	otherUserNewServer := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.otheruser/new-server",
+		Description: "New server owned by other user",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/otheruser/new-server",
+			Source: "github",
+			ID:     "otheruser/new-server",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), otherUserNewServer)
+	require.NoError(t, err)
+
+	// Create servers specifically for newName tests to avoid state conflicts
+	newNameTestServer1 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-1",
+		Description: "Server for newName deprecated test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-1",
+			Source: "github",
+			ID:     "testuser/newname-test-1",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer1)
+	require.NoError(t, err)
+
+	newNameTestServer2 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-2",
+		Description: "Server for newName yanked test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-2",
+			Source: "github",
+			ID:     "testuser/newname-test-2",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer2)
+	require.NoError(t, err)
+
+	newNameTestServer3 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-3",
+		Description: "Server for newName active test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-3",
+			Source: "github",
+			ID:     "testuser/newname-test-3",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer3)
+	require.NoError(t, err)
+
+	newNameTestServer4 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-4",
+		Description: "Server for newName non-existent test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-4",
+			Source: "github",
+			ID:     "testuser/newname-test-4",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer4)
+	require.NoError(t, err)
+
+	newNameTestServer5 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-5",
+		Description: "Server for newName other user test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-5",
+			Source: "github",
+			ID:     "testuser/newname-test-5",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer5)
+	require.NoError(t, err)
+
+	newNameTestServer6 := &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "io.github.testuser/newname-test-6",
+		Description: "Server for newName clearing test",
+		Version:     "1.0.0",
+		Repository: &model.Repository{
+			URL:    "https://github.com/testuser/newname-test-6",
+			Source: "github",
+			ID:     "testuser/newname-test-6",
+		},
+	}
+	_, err = registryService.CreateServer(context.Background(), newNameTestServer6)
+	require.NoError(t, err)
+
+	// Set newname-test-6 to deprecated so we can test transitioning to active
+	_, err = registryService.UpdateServer(context.Background(), newNameTestServer6.Name, newNameTestServer6.Version, newNameTestServer6, &service.StatusChangeRequest{
+		NewStatus: model.StatusDeprecated,
+	})
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name           string
 		serverName     string
@@ -113,6 +250,9 @@ func TestEditServerEndpoint(t *testing.T) {
 		authHeader     string
 		requestBody    apiv0.ServerJSON
 		statusParam    string
+		statusMessage  string
+		alternativeUrl string
+		newName        string
 		expectedStatus int
 		expectedError  string
 		checkResult    func(*testing.T, *apiv0.ServerResponse)
@@ -311,8 +451,8 @@ func TestEditServerEndpoint(t *testing.T) {
 			expectedError:  "Version in request body must match URL path parameter",
 		},
 		{
-			name:       "attempt to undelete server should fail",
-			serverName: "io.github.testuser/deleted-server",
+			name:       "successfully unyank server to active",
+			serverName: "io.github.testuser/yanked-server",
 			version:    "1.0.0",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
@@ -323,13 +463,192 @@ func TestEditServerEndpoint(t *testing.T) {
 			},
 			requestBody: apiv0.ServerJSON{
 				Schema:      model.CurrentSchemaURL,
-				Name:        "io.github.testuser/deleted-server",
-				Description: "Trying to undelete server",
+				Name:        "io.github.testuser/yanked-server",
+				Description: "Successfully unyanking server",
 				Version:     "1.0.0",
 			},
-			statusParam:    "active", // Trying to change from deleted to active
+			statusParam:    "active", // Changing from yanked to active should now be allowed
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
+				assert.Equal(t, "Successfully unyanking server", result.Server.Description)
+			},
+		},
+		{
+			name:       "test active to deprecated transition",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing active to deprecated",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+			},
+		},
+		{
+			name:       "test deprecated to yanked transition",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing deprecated to yanked",
+				Version:     "1.0.0",
+			},
+			statusParam:    "yanked",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
+			},
+		},
+		{
+			name:       "test yanked to active transition",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing yanked to active",
+				Version:     "1.0.0",
+			},
+			statusParam:    "active",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
+			},
+		},
+		{
+			name:       "test same status transition should be rejected",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing same status should fail",
+				Version:     "1.0.0",
+			},
+			statusParam:    "active", // Server is already active
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Cannot change status of deleted server",
+			expectedError:  "Invalid status transition from active to active",
+		},
+		{
+			name:       "test set deprecated with status_message and alternative_url before clearing",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Setting up for active transition test",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			statusMessage:  "This server is deprecated",
+			alternativeUrl: "https://example.com/alternative",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+				assert.NotNil(t, result.Meta.Official.StatusMessage)
+				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+			},
+		},
+		{
+			name:       "test transitioning to active clears status_message and alternative_url",
+			serverName: "io.github.testuser/transition-test-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing transition to active clears fields",
+				Version:     "1.0.0",
+			},
+			statusParam:    "active",
+			statusMessage:  "This should be ignored",           // Should be ignored when transitioning to active
+			alternativeUrl: "https://example.com/should-ignore", // Should be ignored when transitioning to active
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
+				// Verify that status_message and alternative_url are nil/empty
+				assert.Nil(t, result.Meta.Official.StatusMessage, "status_message should be nil when transitioning to active")
+				assert.Nil(t, result.Meta.Official.AlternativeUrl, "alternative_url should be nil when transitioning to active")
+			},
+		},
+		{
+			name:       "test status transition with message and alternative URL",
+			serverName: "io.github.testuser/transition-test-server", // Use clean test server
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/transition-test-server",
+				Description: "Testing status with message and URL",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			statusMessage:  "This server is deprecated. Please migrate.",
+			alternativeUrl: "https://example.com/new-server",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				if result != nil && result.Meta.Official != nil {
+					assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+					assert.NotNil(t, result.Meta.Official.StatusMessage)
+					assert.Equal(t, "This server is deprecated. Please migrate.", *result.Meta.Official.StatusMessage)
+					assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+					assert.Equal(t, "https://example.com/new-server", *result.Meta.Official.AlternativeUrl)
+				}
+			},
 		},
 		{
 			name:       "successful edit of version with build metadata (URL encoded)",
@@ -362,6 +681,160 @@ func TestEditServerEndpoint(t *testing.T) {
 				assert.NotNil(t, resp.Meta.Official)
 			},
 		},
+		// newName validation test cases
+		{
+			name:       "newName with valid deprecated status and permissions",
+			serverName: "io.github.testuser/newname-test-1",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-1",
+				Description: "Deprecating with new name",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			statusMessage:  "Moved to new server",
+			newName:        "io.github.testuser/new-server",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
+				t.Helper()
+				assert.Equal(t, model.StatusDeprecated, resp.Meta.Official.Status)
+				assert.NotNil(t, resp.Meta.Official.NewName)
+				assert.Equal(t, "io.github.testuser/new-server", *resp.Meta.Official.NewName)
+				assert.NotNil(t, resp.Meta.Official.StatusMessage)
+				assert.Equal(t, "Moved to new server", *resp.Meta.Official.StatusMessage)
+			},
+		},
+		{
+			name:       "newName with valid yanked status and permissions",
+			serverName: "io.github.testuser/newname-test-2",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-2",
+				Description: "Yanking with new name",
+				Version:     "1.0.0",
+			},
+			statusParam:    "yanked",
+			statusMessage:  "Security issue, use new server",
+			newName:        "io.github.testuser/new-server",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
+				t.Helper()
+				assert.Equal(t, model.StatusYanked, resp.Meta.Official.Status)
+				assert.NotNil(t, resp.Meta.Official.NewName)
+				assert.Equal(t, "io.github.testuser/new-server", *resp.Meta.Official.NewName)
+			},
+		},
+		{
+			name:       "newName rejected with active status",
+			serverName: "io.github.testuser/newname-test-3",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-3",
+				Description: "Trying newName with active",
+				Version:     "1.0.0",
+			},
+			statusParam:    "active",
+			newName:        "io.github.testuser/new-server",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "new_name can only be used with deprecated or yanked status",
+		},
+		{
+			name:       "newName with non-existent server",
+			serverName: "io.github.testuser/newname-test-4",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-4",
+				Description: "Deprecating with non-existent new name",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			newName:        "io.github.testuser/non-existent-server",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "New server 'io.github.testuser/non-existent-server' does not exist in the registry",
+		},
+		{
+			name:       "newName with server belonging to different user",
+			serverName: "io.github.testuser/newname-test-5",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-5",
+				Description: "Deprecating with other user's server",
+				Version:     "1.0.0",
+			},
+			statusParam:    "deprecated",
+			newName:        "io.github.otheruser/new-server",
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "You do not have permissions for the new server 'io.github.otheruser/new-server'",
+		},
+		{
+			name:       "transitioning to active clears status fields automatically",
+			serverName: "io.github.testuser/newname-test-6",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "io.github.testuser/newname-test-6",
+				Description: "Transitioning back to active",
+				Version:     "1.0.0",
+			},
+			statusParam:    "active",
+			// No newName provided - should still clear any existing newName in DB
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
+				t.Helper()
+				assert.Equal(t, model.StatusActive, resp.Meta.Official.Status)
+				// All status fields should be cleared when transitioning to active
+				assert.Nil(t, resp.Meta.Official.NewName)
+				assert.Nil(t, resp.Meta.Official.StatusMessage)
+				assert.Nil(t, resp.Meta.Official.AlternativeUrl)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -382,7 +855,18 @@ func TestEditServerEndpoint(t *testing.T) {
 			encodedVersion := url.PathEscape(tc.version)
 			requestURL := "/v0/servers/" + encodedServerName + "/versions/" + encodedVersion
 			if tc.statusParam != "" {
-				requestURL += "?status=" + tc.statusParam
+				params := url.Values{}
+				params.Add("status", tc.statusParam)
+				if tc.statusMessage != "" {
+					params.Add("status_message", tc.statusMessage)
+				}
+				if tc.alternativeUrl != "" {
+					params.Add("alternative_url", tc.alternativeUrl)
+				}
+				if tc.newName != "" {
+					params.Add("new_name", tc.newName)
+				}
+				requestURL += "?" + params.Encode()
 			}
 
 			req := httptest.NewRequest(http.MethodPut, requestURL, bytes.NewReader(requestBody))
@@ -404,6 +888,9 @@ func TestEditServerEndpoint(t *testing.T) {
 			mux.ServeHTTP(w, req)
 
 			// Check response
+			if tc.expectedStatus != w.Code {
+				t.Logf("Response body: %s", w.Body.String())
+			}
 			assert.Equal(t, tc.expectedStatus, w.Code)
 
 			if tc.expectedError != "" {
@@ -461,7 +948,9 @@ func TestEditServerEndpointEdgeCases(t *testing.T) {
 				Name:        server.name,
 				Description: "Test server for editing",
 				Version:     server.version,
-			}, stringPtr(string(server.status)))
+			}, &service.StatusChangeRequest{
+				NewStatus: server.status,
+			})
 			require.NoError(t, err)
 		}
 	}
@@ -496,10 +985,10 @@ func TestEditServerEndpointEdgeCases(t *testing.T) {
 				expectedStatus: http.StatusOK,
 			},
 			{
-				name:           "active to deleted",
+				name:           "active to yanked",
 				serverName:     "com.example/active-server",
 				version:        "1.0.0",
-				toStatus:       "deleted",
+				toStatus:       "yanked",
 				expectedStatus: http.StatusOK,
 			},
 			{

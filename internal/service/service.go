@@ -5,7 +5,16 @@ import (
 
 	"github.com/modelcontextprotocol/registry/internal/database"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
+	"github.com/modelcontextprotocol/registry/pkg/model"
 )
+
+// StatusChangeRequest represents a request to change a server's status
+type StatusChangeRequest struct {
+	NewStatus      model.Status `json:"newStatus"`
+	StatusMessage  *string      `json:"statusMessage,omitempty"`
+	AlternativeUrl *string      `json:"alternativeUrl,omitempty"`
+	NewName        *string      `json:"newName,omitempty"`
+}
 
 // RegistryService defines the interface for registry operations
 type RegistryService interface {
@@ -20,5 +29,5 @@ type RegistryService interface {
 	// CreateServer creates a new server version
 	CreateServer(ctx context.Context, req *apiv0.ServerJSON) (*apiv0.ServerResponse, error)
 	// UpdateServer updates an existing server and optionally its status
-	UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, newStatus *string) (*apiv0.ServerResponse, error)
+	UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error)
 }

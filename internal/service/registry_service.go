@@ -152,10 +152,11 @@ func (s *registryServiceImpl) createServerInTransaction(ctx context.Context, tx 
 
 	// Create metadata for the new server
 	officialMeta := &apiv0.RegistryExtensions{
-		Status:      model.StatusActive, /* New versions are active by default */
-		PublishedAt: publishTime,
-		UpdatedAt:   publishTime,
-		IsLatest:    isNewLatest,
+		Status:          model.StatusActive, /* New versions are active by default */
+		StatusChangedAt: publishTime,
+		PublishedAt:     publishTime,
+		UpdatedAt:       publishTime,
+		IsLatest:        isNewLatest,
 	}
 
 	// Insert new server version
@@ -186,29 +187,29 @@ func (s *registryServiceImpl) validateNoDuplicateRemoteURLs(ctx context.Context,
 }
 
 // UpdateServer updates an existing server with new details
-func (s *registryServiceImpl) UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, newStatus *string) (*apiv0.ServerResponse, error) {
+func (s *registryServiceImpl) UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error) {
 	// Wrap the entire operation in a transaction
 	return database.InTransactionT(ctx, s.db, func(ctx context.Context, tx pgx.Tx) (*apiv0.ServerResponse, error) {
-		return s.updateServerInTransaction(ctx, tx, serverName, version, req, newStatus)
+		return s.updateServerInTransaction(ctx, tx, serverName, version, req, statusChange)
 	})
 }
 
 // updateServerInTransaction contains the actual UpdateServer logic within a transaction
-func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx pgx.Tx, serverName, version string, req *apiv0.ServerJSON, newStatus *string) (*apiv0.ServerResponse, error) {
-	// Get current server to check if it's deleted or being deleted
+func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx pgx.Tx, serverName, version string, req *apiv0.ServerJSON, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error) {
+	// Get current server to check if it's yanked or being yanked
 	currentServer, err := s.db.GetServerByNameAndVersion(ctx, tx, serverName, version)
 	if err != nil {
 		return nil, err
 	}
 
 	// Skip registry validation if:
-	// 1. Server is currently deleted, OR
-	// 2. Server is being set to deleted status
-	currentlyDeleted := currentServer.Meta.Official != nil && currentServer.Meta.Official.Status == model.StatusDeleted
-	beingDeleted := newStatus != nil && *newStatus == string(model.StatusDeleted)
-	skipRegistryValidation := currentlyDeleted || beingDeleted
+	// 1. Server is currently yanked, OR
+	// 2. Server is being set to yanked status
+	currentlyYanked := currentServer.Meta.Official != nil && currentServer.Meta.Official.Status == model.StatusYanked
+	beingYanked := statusChange != nil && statusChange.NewStatus == model.StatusYanked
+	skipRegistryValidation := currentlyYanked || beingYanked
 
-	// Validate the request, potentially skipping registry validation for deleted servers
+	// Validate the request, potentially skipping registry validation for yanked servers
 	if err := s.validateUpdateRequest(ctx, *req, skipRegistryValidation); err != nil {
 		return nil, err
 	}
@@ -233,8 +234,8 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 	}
 
 	// Handle status change if provided
-	if newStatus != nil {
-		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, *newStatus)
+	if statusChange != nil {
+		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeUrl, statusChange.NewName)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +252,7 @@ func (s *registryServiceImpl) validateUpdateRequest(ctx context.Context, req api
 		return err
 	}
 
-	// Skip registry validation if requested (for deleted servers)
+	// Skip registry validation if requested (for yanked servers)
 	if skipRegistryValidation || !s.cfg.EnableRegistryValidation {
 		return nil
 	}

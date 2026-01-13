@@ -514,7 +514,7 @@ func TestServersEndpointEdgeCases(t *testing.T) {
 			assert.NotNil(t, server.Meta)
 			assert.NotNil(t, server.Meta.Official)
 			assert.NotZero(t, server.Meta.Official.PublishedAt)
-			assert.Contains(t, []model.Status{model.StatusActive, model.StatusDeprecated, model.StatusDeleted}, server.Meta.Official.Status)
+			assert.Contains(t, []model.Status{model.StatusActive, model.StatusDeprecated, model.StatusYanked}, server.Meta.Official.Status)
 		}
 	})
 }

@@ -17,6 +17,7 @@ import (
 func TestPostgreSQL_CreateServer(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	tests := []struct {
 		name         string
@@ -36,10 +37,11 @@ func TestPostgreSQL_CreateServer(t *testing.T) {
 				},
 			},
 			officialMeta: &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
-				IsLatest:    true,
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        true,
 			},
 			expectError: false,
 		},
@@ -51,10 +53,11 @@ func TestPostgreSQL_CreateServer(t *testing.T) {
 				Version:     "1.0.0",
 			},
 			officialMeta: &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
-				IsLatest:    true,
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        true,
 			},
 			expectError: true,
 			// Note: Expecting generic database error for constraint violation
@@ -94,6 +97,7 @@ func TestPostgreSQL_CreateServer(t *testing.T) {
 func TestPostgreSQL_GetServerByName(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	// Setup test data
 	serverJSON := &apiv0.ServerJSON{
@@ -102,10 +106,11 @@ func TestPostgreSQL_GetServerByName(t *testing.T) {
 		Version:     "1.0.0",
 	}
 	officialMeta := &apiv0.RegistryExtensions{
-		Status:      model.StatusActive,
-		PublishedAt: time.Now(),
-		UpdatedAt:   time.Now(),
-		IsLatest:    true,
+		Status:          model.StatusActive,
+		StatusChangedAt: timeNow,
+		PublishedAt:     timeNow,
+		UpdatedAt:       timeNow,
+		IsLatest:        true,
 	}
 
 	// Create the server
@@ -153,6 +158,7 @@ func TestPostgreSQL_GetServerByName(t *testing.T) {
 func TestPostgreSQL_GetServerByNameAndVersion(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	// Setup test data with multiple versions
 	serverName := "com.example/version-test-server"
@@ -165,9 +171,10 @@ func TestPostgreSQL_GetServerByNameAndVersion(t *testing.T) {
 			Version:     version,
 		}
 		officialMeta := &apiv0.RegistryExtensions{
-			Status:      model.StatusActive,
-			PublishedAt: time.Now(),
-			UpdatedAt:   time.Now(),
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
 			IsLatest:    i == len(versions)-1, // Only last version is latest
 		}
 
@@ -274,10 +281,11 @@ func TestPostgreSQL_ListServers(t *testing.T) {
 			},
 		}
 		officialMeta := &apiv0.RegistryExtensions{
-			Status:      server.status,
-			PublishedAt: server.publishedAt,
-			UpdatedAt:   server.publishedAt,
-			IsLatest:    server.isLatest,
+			Status:          server.status,
+			StatusChangedAt: server.publishedAt,
+			PublishedAt:     server.publishedAt,
+			UpdatedAt:       server.publishedAt,
+			IsLatest:        server.isLatest,
 		}
 
 		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
@@ -398,6 +406,7 @@ func TestPostgreSQL_ListServers(t *testing.T) {
 func TestPostgreSQL_UpdateServer(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	// Setup test data
 	serverName := "com.example/update-test-server"
@@ -408,10 +417,11 @@ func TestPostgreSQL_UpdateServer(t *testing.T) {
 		Version:     version,
 	}
 	officialMeta := &apiv0.RegistryExtensions{
-		Status:      model.StatusActive,
-		PublishedAt: time.Now(),
-		UpdatedAt:   time.Now(),
-		IsLatest:    true,
+		Status:          model.StatusActive,
+		StatusChangedAt: timeNow,
+		PublishedAt:     timeNow,
+		UpdatedAt:       timeNow,
+		IsLatest:        true,
 	}
 
 	_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
@@ -476,6 +486,7 @@ func TestPostgreSQL_UpdateServer(t *testing.T) {
 func TestPostgreSQL_SetServerStatus(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	// Setup test data
 	serverName := "com.example/status-test-server"
@@ -486,10 +497,11 @@ func TestPostgreSQL_SetServerStatus(t *testing.T) {
 		Version:     version,
 	}
 	officialMeta := &apiv0.RegistryExtensions{
-		Status:      model.StatusActive,
-		PublishedAt: time.Now(),
-		UpdatedAt:   time.Now(),
-		IsLatest:    true,
+		Status:          model.StatusActive,
+		StatusChangedAt: timeNow,
+		PublishedAt:     timeNow,
+		UpdatedAt:       timeNow,
+		IsLatest:        true,
 	}
 
 	_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
@@ -528,7 +540,7 @@ func TestPostgreSQL_SetServerStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := db.SetServerStatus(ctx, nil, tt.serverName, tt.version, tt.newStatus)
+			result, err := db.SetServerStatus(ctx, nil, tt.serverName, tt.version, model.Status(tt.newStatus), nil, nil, nil)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -551,6 +563,7 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful transaction", func(t *testing.T) {
+		timeNow := time.Now()
 		err := db.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
 			serverJSON := &apiv0.ServerJSON{
 				Name:        "com.example/transaction-success",
@@ -558,10 +571,11 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 				Version:     "1.0.0",
 			}
 			officialMeta := &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
-				IsLatest:    true,
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        true,
 			}
 
 			_, err := db.CreateServer(ctx, tx, serverJSON, officialMeta)
@@ -577,6 +591,7 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 	})
 
 	t.Run("failed transaction rollback", func(t *testing.T) {
+		timeNow := time.Now()
 		err := db.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
 			serverJSON := &apiv0.ServerJSON{
 				Name:        "com.example/transaction-rollback",
@@ -584,10 +599,11 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 				Version:     "1.0.0",
 			}
 			officialMeta := &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
-				IsLatest:    true,
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        true,
 			}
 
 			_, err := db.CreateServer(ctx, tx, serverJSON, officialMeta)
@@ -624,6 +640,7 @@ func TestPostgreSQL_ConcurrencyAndLocking(t *testing.T) {
 		// Launch two concurrent publish operations
 		for i := 0; i < 2; i++ {
 			go func(version string) {
+				timeNow := time.Now()
 				err := db.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
 					// Acquire lock
 					if err := db.AcquirePublishLock(ctx, tx, serverName); err != nil {
@@ -639,10 +656,11 @@ func TestPostgreSQL_ConcurrencyAndLocking(t *testing.T) {
 						Version:     version,
 					}
 					officialMeta := &apiv0.RegistryExtensions{
-						Status:      model.StatusActive,
-						PublishedAt: time.Now(),
-						UpdatedAt:   time.Now(),
-						IsLatest:    true,
+						Status:          model.StatusActive,
+						StatusChangedAt: timeNow,
+						PublishedAt:     timeNow,
+						UpdatedAt:       timeNow,
+						IsLatest:        true,
 					}
 
 					_, err := db.CreateServer(ctx, tx, serverJSON, officialMeta)
@@ -681,6 +699,7 @@ func TestPostgreSQL_ConcurrencyAndLocking(t *testing.T) {
 func TestPostgreSQL_HelperMethods(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	serverName := "com.example/helper-test-server"
 
@@ -693,9 +712,10 @@ func TestPostgreSQL_HelperMethods(t *testing.T) {
 			Version:     version,
 		}
 		officialMeta := &apiv0.RegistryExtensions{
-			Status:      model.StatusActive,
-			PublishedAt: time.Now(),
-			UpdatedAt:   time.Now(),
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
 			IsLatest:    version == "2.0.0",
 		}
 
@@ -762,6 +782,7 @@ func TestPostgreSQL_HelperMethods(t *testing.T) {
 func TestPostgreSQL_EdgeCases(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	t.Run("input validation", func(t *testing.T) {
 		// Test nil inputs
@@ -783,9 +804,10 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 			Version:     "1.0.0",
 		}
 		officialMeta := &apiv0.RegistryExtensions{
-			Status:      model.StatusActive,
-			PublishedAt: time.Now(),
-			UpdatedAt:   time.Now(),
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
 			IsLatest:    true,
 		}
 
@@ -821,10 +843,11 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 				{Type: "streamable-http", URL: "https://complex.example.com/mcp"},
 			},
 		}, &apiv0.RegistryExtensions{
-			Status:      model.StatusActive,
-			PublishedAt: testTime,
-			UpdatedAt:   testTime,
-			IsLatest:    true,
+			Status:          model.StatusActive,
+			StatusChangedAt: testTime,
+			PublishedAt:     testTime,
+			UpdatedAt:       testTime,
+			IsLatest:        true,
 		})
 		require.NoError(t, err)
 
@@ -852,24 +875,129 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 			Description: "Status transition test",
 			Version:     version,
 		}, &apiv0.RegistryExtensions{
-			Status:      model.StatusActive,
-			PublishedAt: time.Now(),
-			UpdatedAt:   time.Now(),
-			IsLatest:    true,
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
 		})
 		require.NoError(t, err)
 
 		// Test all valid status transitions
 		statuses := []string{
 			string(model.StatusDeprecated),
-			string(model.StatusDeleted),
+			string(model.StatusYanked),
 			string(model.StatusActive), // Can transition back
 		}
 
 		for _, status := range statuses {
-			result, err := db.SetServerStatus(ctx, nil, serverName, version, status)
+			result, err := db.SetServerStatus(ctx, nil, serverName, version, model.Status(status), nil, nil, nil)
 			assert.NoError(t, err, "Should allow transition to %s", status)
 			assert.Equal(t, model.Status(status), result.Meta.Official.Status)
+		}
+	})
+
+	// Test status transitions with additional fields
+	t.Run("status transitions with message and alternative URL", func(t *testing.T) {
+		testServerName := "com.example/status-fields-test"
+		testVersion := "1.0.0"
+
+		// Create a test server
+		_, err := db.CreateServer(ctx, nil, &apiv0.ServerJSON{
+			Name:        testServerName,
+			Description: "Status fields test",
+			Version:     testVersion,
+		}, &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		})
+		require.NoError(t, err)
+
+		statusMessage := "This server has been deprecated. Please use the new version."
+		alternativeUrl := "https://example.com/new-server"
+
+		// Test setting status with message and alternative URL
+		result, err := db.SetServerStatus(ctx, nil, testServerName, testVersion, model.StatusDeprecated, &statusMessage, &alternativeUrl, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+		assert.NotNil(t, result.Meta.Official.StatusMessage)
+		assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
+		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+		assert.NotZero(t, result.Meta.Official.StatusChangedAt)
+
+		// Test clearing status message and alternative URL
+		result, err = db.SetServerStatus(ctx, nil, testServerName, testVersion, model.StatusActive, nil, nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
+		assert.Nil(t, result.Meta.Official.StatusMessage)
+		assert.Nil(t, result.Meta.Official.AlternativeUrl)
+	})
+
+	// Test comprehensive status transitions as per user requirements
+	t.Run("comprehensive status transitions", func(t *testing.T) {
+		testServerName := "com.example/comprehensive-transitions-test"
+		testVersion := "1.0.0"
+
+		// Create a test server in active status
+		_, err := db.CreateServer(ctx, nil, &apiv0.ServerJSON{
+			Name:        testServerName,
+			Description: "Comprehensive transitions test",
+			Version:     testVersion,
+		}, &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		})
+		require.NoError(t, err)
+
+		// Define all valid transitions based on user requirements
+		transitionTests := []struct {
+			name        string
+			fromStatus  model.Status
+			toStatus    model.Status
+			description string
+		}{
+			// Active ↔ Deprecated
+			{"active to deprecated", model.StatusActive, model.StatusDeprecated, "Deprecating active server"},
+			{"deprecated to active", model.StatusDeprecated, model.StatusActive, "Reactivating deprecated server"},
+
+			// Active ↔ Yanked
+			{"active to yanked", model.StatusActive, model.StatusYanked, "Yanking active server"},
+			{"yanked to active", model.StatusYanked, model.StatusActive, "Unyanking to active server"},
+
+			// Deprecated ↔ Yanked
+			{"deprecated to yanked", model.StatusDeprecated, model.StatusYanked, "Yanking deprecated server"},
+			{"yanked to deprecated", model.StatusYanked, model.StatusDeprecated, "Moving yanked to deprecated"},
+		}
+
+		for _, tt := range transitionTests {
+			t.Run(tt.name, func(t *testing.T) {
+				// First ensure the server is in the expected starting status
+				if tt.fromStatus != model.StatusActive {
+					_, err := db.SetServerStatus(ctx, nil, testServerName, testVersion, tt.fromStatus, nil, nil, nil)
+					require.NoError(t, err, "failed to set initial status to %s", tt.fromStatus)
+				}
+
+				// Verify the server is in the expected starting status
+				currentServer, err := db.GetServerByNameAndVersion(ctx, nil, testServerName, testVersion)
+				require.NoError(t, err)
+				assert.Equal(t, tt.fromStatus, currentServer.Meta.Official.Status, "server should be in %s status before transition", tt.fromStatus)
+
+				// Perform the transition
+				result, err := db.SetServerStatus(ctx, nil, testServerName, testVersion, tt.toStatus, &tt.description, nil, nil)
+				assert.NoError(t, err, "should allow transition from %s to %s", tt.fromStatus, tt.toStatus)
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.toStatus, result.Meta.Official.Status, "status should be %s after transition", tt.toStatus)
+				assert.NotNil(t, result.Meta.Official.StatusMessage)
+				assert.Equal(t, tt.description, *result.Meta.Official.StatusMessage)
+				assert.NotZero(t, result.Meta.Official.StatusChangedAt)
+			})
 		}
 	})
 }
@@ -877,6 +1005,7 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
+	timeNow := time.Now()
 
 	t.Run("many versions management", func(t *testing.T) {
 		serverName := "com.example/many-versions-server"
@@ -889,9 +1018,10 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 				Description: fmt.Sprintf("Version %d", i),
 				Version:     fmt.Sprintf("1.0.%d", i),
 			}, &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
 				IsLatest:    i == versionCount-1, // Only last one is latest
 			})
 			require.NoError(t, err)
@@ -926,9 +1056,10 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 				Description: "Pagination test server",
 				Version:     "1.0.0",
 			}, &apiv0.RegistryExtensions{
-				Status:      model.StatusActive,
-				PublishedAt: time.Now(),
-				UpdatedAt:   time.Now(),
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
 				IsLatest:    true,
 			})
 			require.NoError(t, err)
@@ -952,6 +1083,334 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 
 		// Should have retrieved all servers including the ones we just created
 		assert.GreaterOrEqual(t, len(allResults), serverCount)
+	})
+}
+
+func TestPostgreSQL_NewStatusFields(t *testing.T) {
+	db := database.NewTestDB(t)
+	ctx := context.Background()
+	timeNow := time.Now()
+
+	t.Run("status_changed_at field functionality", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/status-changed-at-test",
+			Description: "Test server for status_changed_at field",
+			Version:     "1.0.0",
+		}
+
+		// Create server with specific status_changed_at
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Retrieve and verify status_changed_at
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		require.NoError(t, err)
+		assert.NotNil(t, result.Meta.Official)
+		assert.Equal(t, timeNow.Unix(), result.Meta.Official.StatusChangedAt.Unix())
+	})
+
+	t.Run("status_message field functionality", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/status-message-test",
+			Description: "Test server for status_message field",
+			Version:     "1.0.0",
+		}
+
+		statusMessage := "This server is deprecated due to security issues. Please migrate to v2.0.0"
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusDeprecated,
+			StatusChangedAt: timeNow,
+			StatusMessage:   &statusMessage,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Retrieve and verify status_message
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		require.NoError(t, err)
+		assert.NotNil(t, result.Meta.Official)
+		assert.NotNil(t, result.Meta.Official.StatusMessage)
+		assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
+	})
+
+	t.Run("alternative_url field functionality", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/alternative-url-test",
+			Description: "Test server for alternative_url field",
+			Version:     "1.0.0",
+		}
+
+		alternativeUrl := "https://github.com/example/new-server-v2"
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusDeprecated,
+			StatusChangedAt: timeNow,
+			AlternativeUrl:  &alternativeUrl,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Retrieve and verify alternative_url
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		require.NoError(t, err)
+		assert.NotNil(t, result.Meta.Official)
+		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+	})
+
+	t.Run("yanked status functionality", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/yanked-status-test",
+			Description: "Test server for yanked status",
+			Version:     "1.0.0",
+		}
+
+		statusMessage := "This version has critical security vulnerabilities and has been yanked"
+		alternativeUrl := "https://github.com/example/secure-version"
+
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusYanked,
+			StatusChangedAt: timeNow,
+			StatusMessage:   &statusMessage,
+			AlternativeUrl:  &alternativeUrl,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        false, // Yanked versions should not be latest
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Retrieve and verify yanked status with all fields
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		require.NoError(t, err)
+		assert.NotNil(t, result.Meta.Official)
+		assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
+		assert.NotNil(t, result.Meta.Official.StatusMessage)
+		assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
+		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+		assert.False(t, result.Meta.Official.IsLatest)
+	})
+
+	t.Run("nil status_message and alternative_url", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/nil-fields-test",
+			Description: "Test server for nil optional fields",
+			Version:     "1.0.0",
+		}
+
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			StatusMessage:   nil, // Explicitly nil
+			AlternativeUrl:  nil, // Explicitly nil
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Retrieve and verify nil fields are handled correctly
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		require.NoError(t, err)
+		assert.NotNil(t, result.Meta.Official)
+		assert.Nil(t, result.Meta.Official.StatusMessage)
+		assert.Nil(t, result.Meta.Official.AlternativeUrl)
+	})
+
+	t.Run("status_changed_at constraint enforcement", func(t *testing.T) {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/constraint-test",
+			Description: "Test server for constraint validation",
+			Version:     "1.0.0",
+		}
+
+		// Try to create server with status_changed_at before published_at (should fail)
+		earlierTime := timeNow.Add(-1 * time.Hour)
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: earlierTime, // Before published_at
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "check_status_changed_at_after_published")
+	})
+
+	t.Run("all status transitions work", func(t *testing.T) {
+		// Test that we can create servers with all valid status values
+		statuses := []model.Status{
+			model.StatusActive,
+			model.StatusDeprecated,
+			model.StatusYanked,
+		}
+
+		for i, status := range statuses {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        fmt.Sprintf("com.example/status-test-%d", i),
+				Description: fmt.Sprintf("Test server for status %s", status),
+				Version:     "1.0.0",
+			}
+
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          status,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        true,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			assert.NoError(t, err, "Should be able to create server with status: %s", status)
+
+			// Verify the status was set correctly
+			result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+			require.NoError(t, err)
+			assert.Equal(t, status, result.Meta.Official.Status)
+		}
+	})
+}
+
+func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
+	db := database.NewTestDB(t)
+	ctx := context.Background()
+	timeNow := time.Now()
+
+	// Create test servers with different statuses and status fields
+	testServers := []struct {
+		name           string
+		status         model.Status
+		statusMessage  *string
+		alternativeUrl *string
+	}{
+		{
+			name:           "com.example/active-server",
+			status:         model.StatusActive,
+			statusMessage:  nil,
+			alternativeUrl: nil,
+		},
+		{
+			name:           "com.example/deprecated-server",
+			status:         model.StatusDeprecated,
+			statusMessage:  stringPtr("Deprecated in favor of v2"),
+			alternativeUrl: stringPtr("https://github.com/example/v2"),
+		},
+		{
+			name:           "com.example/yanked-server",
+			status:         model.StatusYanked,
+			statusMessage:  stringPtr("Security vulnerability found"),
+			alternativeUrl: stringPtr("https://github.com/example/secure"),
+		},
+	}
+
+	// Create all test servers
+	for _, server := range testServers {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        server.name,
+			Description: "Test server for list operations",
+			Version:     "1.0.0",
+		}
+
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          server.status,
+			StatusChangedAt: timeNow,
+			StatusMessage:   server.statusMessage,
+			AlternativeUrl:  server.alternativeUrl,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+	}
+
+	t.Run("ListServers includes new status fields", func(t *testing.T) {
+		results, _, err := db.ListServers(ctx, nil, nil, "", 10)
+		require.NoError(t, err)
+
+		// Find our test servers in the results
+		foundServers := make(map[string]*apiv0.ServerResponse)
+		for _, result := range results {
+			for _, testServer := range testServers {
+				if result.Server.Name == testServer.name {
+					foundServers[testServer.name] = result
+				}
+			}
+		}
+
+		// Verify all test servers were found with correct status fields
+		for _, testServer := range testServers {
+			result, found := foundServers[testServer.name]
+			assert.True(t, found, "Server %s should be found in list results", testServer.name)
+			if !found {
+				continue
+			}
+
+			assert.NotNil(t, result.Meta.Official)
+			assert.Equal(t, testServer.status, result.Meta.Official.Status)
+			assert.Equal(t, timeNow.Unix(), result.Meta.Official.StatusChangedAt.Unix())
+
+			if testServer.statusMessage != nil {
+				assert.NotNil(t, result.Meta.Official.StatusMessage)
+				assert.Equal(t, *testServer.statusMessage, *result.Meta.Official.StatusMessage)
+			} else {
+				assert.Nil(t, result.Meta.Official.StatusMessage)
+			}
+
+			if testServer.alternativeUrl != nil {
+				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+				assert.Equal(t, *testServer.alternativeUrl, *result.Meta.Official.AlternativeUrl)
+			} else {
+				assert.Nil(t, result.Meta.Official.AlternativeUrl)
+			}
+		}
+	})
+
+	t.Run("GetServerByName includes new status fields", func(t *testing.T) {
+		for _, testServer := range testServers {
+			result, err := db.GetServerByName(ctx, nil, testServer.name)
+			require.NoError(t, err)
+
+			assert.NotNil(t, result.Meta.Official)
+			assert.Equal(t, testServer.status, result.Meta.Official.Status)
+			assert.Equal(t, timeNow.Unix(), result.Meta.Official.StatusChangedAt.Unix())
+
+			if testServer.statusMessage != nil {
+				assert.NotNil(t, result.Meta.Official.StatusMessage)
+				assert.Equal(t, *testServer.statusMessage, *result.Meta.Official.StatusMessage)
+			} else {
+				assert.Nil(t, result.Meta.Official.StatusMessage)
+			}
+
+			if testServer.alternativeUrl != nil {
+				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+				assert.Equal(t, *testServer.alternativeUrl, *result.Meta.Official.AlternativeUrl)
+			} else {
+				assert.Nil(t, result.Meta.Official.AlternativeUrl)
+			}
+		}
 	})
 }
 
