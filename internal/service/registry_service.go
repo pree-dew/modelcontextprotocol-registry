@@ -246,24 +246,3 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 	return updatedServerResponse, nil
 }
 
-// validateUpdateRequest validates an update request with optional registry validation skipping
-func (s *registryServiceImpl) validateUpdateRequest(ctx context.Context, req apiv0.ServerJSON, skipRegistryValidation bool) error {
-	// Always validate the server JSON structure
-	if result := validators.ValidateServerJSON(&req, validators.ValidationSemanticOnly); !result.Valid {
-		return result.FirstError()
-	}
-
-	// Skip registry validation if requested (for yanked servers)
-	if skipRegistryValidation || !s.cfg.EnableRegistryValidation {
-		return nil
-	}
-
-	// Perform registry validation for all packages
-	for i, pkg := range req.Packages {
-		if err := validators.ValidatePackage(ctx, pkg, req.Name); err != nil {
-			return fmt.Errorf("registry validation failed for package %d (%s): %w", i, pkg.Identifier, err)
-		}
-	}
-
-	return nil
-}
