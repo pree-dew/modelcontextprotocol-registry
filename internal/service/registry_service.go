@@ -245,4 +245,3 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 
 	return updatedServerResponse, nil
 }
-
