@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/modelcontextprotocol/registry/internal/config"
 	"github.com/modelcontextprotocol/registry/internal/database"
 	"github.com/modelcontextprotocol/registry/internal/validators"
@@ -210,7 +211,7 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 	skipRegistryValidation := currentlyYanked || beingYanked
 
 	// Validate the request, potentially skipping registry validation for yanked servers
-	if err := s.validateUpdateRequest(ctx, *req, skipRegistryValidation); err != nil {
+	if err := validators.ValidateUpdateRequest(ctx, *req, s.cfg, skipRegistryValidation); err != nil {
 		return nil, err
 	}
 
@@ -248,8 +249,8 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 // validateUpdateRequest validates an update request with optional registry validation skipping
 func (s *registryServiceImpl) validateUpdateRequest(ctx context.Context, req apiv0.ServerJSON, skipRegistryValidation bool) error {
 	// Always validate the server JSON structure
-	if err := validators.ValidateServerJSON(&req); err != nil {
-		return err
+	if result := validators.ValidateServerJSON(&req, validators.ValidationSemanticOnly); !result.Valid {
+		return result.FirstError()
 	}
 
 	// Skip registry validation if requested (for yanked servers)

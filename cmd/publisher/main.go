@@ -45,6 +45,8 @@ func main() {
 		err = commands.PublishCommand(os.Args[2:])
 	case "status":
 		err = commands.StatusCommand(os.Args[2:])
+	case "validate":
+		err = commands.ValidateCommand(os.Args[2:])
 	case "--version", "-v", "version":
 		log.Printf("mcp-publisher %s (commit: %s, built: %s)", Version, GitCommit, BuildTime)
 		return
@@ -74,6 +76,7 @@ func printUsage() {
 	_, _ = fmt.Fprintln(os.Stdout, "  logout        Clear saved authentication")
 	_, _ = fmt.Fprintln(os.Stdout, "  publish       Publish server.json to the registry")
 	_, _ = fmt.Fprintln(os.Stdout, "  status        Update the status of a server version")
+	_, _ = fmt.Fprintln(os.Stdout, "  validate      Validate server.json without publishing")
 	_, _ = fmt.Fprintln(os.Stdout)
 	_, _ = fmt.Fprintln(os.Stdout, "Use 'mcp-publisher <command> --help' for more information about a command.")
 }
