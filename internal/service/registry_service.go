@@ -235,7 +235,7 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 
 	// Handle status change if provided
 	if statusChange != nil {
-		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeUrl, statusChange.NewName)
+		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
 		if err != nil {
 			return nil, err
 		}

@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testVersion100 = "1.0.0"
+
 func TestPostgreSQL_CreateServer(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()
@@ -175,7 +177,7 @@ func TestPostgreSQL_GetServerByNameAndVersion(t *testing.T) {
 			StatusChangedAt: timeNow,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
-			IsLatest:    i == len(versions)-1, // Only last version is latest
+			IsLatest:        i == len(versions)-1, // Only last version is latest
 		}
 
 		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
@@ -410,7 +412,7 @@ func TestPostgreSQL_UpdateServer(t *testing.T) {
 
 	// Setup test data
 	serverName := "com.example/update-test-server"
-	version := "1.0.0"
+	version := testVersion100
 	serverJSON := &apiv0.ServerJSON{
 		Name:        serverName,
 		Description: "Original description",
@@ -451,11 +453,11 @@ func TestPostgreSQL_UpdateServer(t *testing.T) {
 		{
 			name:       "update non-existent server",
 			serverName: "com.example/non-existent",
-			version:    "1.0.0",
+			version:    testVersion100,
 			updatedServer: &apiv0.ServerJSON{
 				Name:        "com.example/non-existent",
 				Description: "Should fail",
-				Version:     "1.0.0",
+				Version:     testVersion100,
 			},
 			expectError: true,
 			errorType:   database.ErrNotFound,
@@ -716,7 +718,7 @@ func TestPostgreSQL_HelperMethods(t *testing.T) {
 			StatusChangedAt: timeNow,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
-			IsLatest:    version == "2.0.0",
+			IsLatest:        version == "2.0.0",
 		}
 
 		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
@@ -808,7 +810,7 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 			StatusChangedAt: timeNow,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
-			IsLatest:    true,
+			IsLatest:        true,
 		}
 
 		_, err := db.CreateServer(ctx, nil, invalidServer, officialMeta)
@@ -917,16 +919,16 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 		require.NoError(t, err)
 
 		statusMessage := "This server has been deprecated. Please use the new version."
-		alternativeUrl := "https://example.com/new-server"
+		alternativeURL := "https://example.com/new-server"
 
 		// Test setting status with message and alternative URL
-		result, err := db.SetServerStatus(ctx, nil, testServerName, testVersion, model.StatusDeprecated, &statusMessage, &alternativeUrl, nil)
+		result, err := db.SetServerStatus(ctx, nil, testServerName, testVersion, model.StatusDeprecated, &statusMessage, &alternativeURL, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 		assert.NotNil(t, result.Meta.Official.StatusMessage)
 		assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
-		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+		assert.NotNil(t, result.Meta.Official.AlternativeURL)
+		assert.Equal(t, alternativeURL, *result.Meta.Official.AlternativeURL)
 		assert.NotZero(t, result.Meta.Official.StatusChangedAt)
 
 		// Test clearing status message and alternative URL
@@ -934,7 +936,7 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
 		assert.Nil(t, result.Meta.Official.StatusMessage)
-		assert.Nil(t, result.Meta.Official.AlternativeUrl)
+		assert.Nil(t, result.Meta.Official.AlternativeURL)
 	})
 
 	// Test comprehensive status transitions as per user requirements
@@ -1022,7 +1024,7 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 				StatusChangedAt: timeNow,
 				PublishedAt:     timeNow,
 				UpdatedAt:       timeNow,
-				IsLatest:    i == versionCount-1, // Only last one is latest
+				IsLatest:        i == versionCount-1, // Only last one is latest
 			})
 			require.NoError(t, err)
 		}
@@ -1060,7 +1062,7 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 				StatusChangedAt: timeNow,
 				PublishedAt:     timeNow,
 				UpdatedAt:       timeNow,
-				IsLatest:    true,
+				IsLatest:        true,
 			})
 			require.NoError(t, err)
 		}
@@ -1152,11 +1154,11 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 			Version:     "1.0.0",
 		}
 
-		alternativeUrl := "https://github.com/example/new-server-v2"
+		alternativeURL := "https://github.com/example/new-server-v2"
 		officialMeta := &apiv0.RegistryExtensions{
 			Status:          model.StatusDeprecated,
 			StatusChangedAt: timeNow,
-			AlternativeUrl:  &alternativeUrl,
+			AlternativeURL:  &alternativeURL,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
 			IsLatest:        true,
@@ -1169,8 +1171,8 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
-		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+		assert.NotNil(t, result.Meta.Official.AlternativeURL)
+		assert.Equal(t, alternativeURL, *result.Meta.Official.AlternativeURL)
 	})
 
 	t.Run("yanked status functionality", func(t *testing.T) {
@@ -1181,13 +1183,13 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		}
 
 		statusMessage := "This version has critical security vulnerabilities and has been yanked"
-		alternativeUrl := "https://github.com/example/secure-version"
+		alternativeURL := "https://github.com/example/secure-version"
 
 		officialMeta := &apiv0.RegistryExtensions{
 			Status:          model.StatusYanked,
 			StatusChangedAt: timeNow,
 			StatusMessage:   &statusMessage,
-			AlternativeUrl:  &alternativeUrl,
+			AlternativeURL:  &alternativeURL,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
 			IsLatest:        false, // Yanked versions should not be latest
@@ -1203,8 +1205,8 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
 		assert.NotNil(t, result.Meta.Official.StatusMessage)
 		assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
-		assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-		assert.Equal(t, alternativeUrl, *result.Meta.Official.AlternativeUrl)
+		assert.NotNil(t, result.Meta.Official.AlternativeURL)
+		assert.Equal(t, alternativeURL, *result.Meta.Official.AlternativeURL)
 		assert.False(t, result.Meta.Official.IsLatest)
 	})
 
@@ -1219,7 +1221,7 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 			Status:          model.StatusActive,
 			StatusChangedAt: timeNow,
 			StatusMessage:   nil, // Explicitly nil
-			AlternativeUrl:  nil, // Explicitly nil
+			AlternativeURL:  nil, // Explicitly nil
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
 			IsLatest:        true,
@@ -1233,7 +1235,7 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
 		assert.Nil(t, result.Meta.Official.StatusMessage)
-		assert.Nil(t, result.Meta.Official.AlternativeUrl)
+		assert.Nil(t, result.Meta.Official.AlternativeURL)
 	})
 
 	t.Run("status_changed_at constraint enforcement", func(t *testing.T) {
@@ -1302,25 +1304,25 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 		name           string
 		status         model.Status
 		statusMessage  *string
-		alternativeUrl *string
+		alternativeURL *string
 	}{
 		{
 			name:           "com.example/active-server",
 			status:         model.StatusActive,
 			statusMessage:  nil,
-			alternativeUrl: nil,
+			alternativeURL: nil,
 		},
 		{
 			name:           "com.example/deprecated-server",
 			status:         model.StatusDeprecated,
 			statusMessage:  stringPtr("Deprecated in favor of v2"),
-			alternativeUrl: stringPtr("https://github.com/example/v2"),
+			alternativeURL: stringPtr("https://github.com/example/v2"),
 		},
 		{
 			name:           "com.example/yanked-server",
 			status:         model.StatusYanked,
 			statusMessage:  stringPtr("Security vulnerability found"),
-			alternativeUrl: stringPtr("https://github.com/example/secure"),
+			alternativeURL: stringPtr("https://github.com/example/secure"),
 		},
 	}
 
@@ -1336,7 +1338,7 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 			Status:          server.status,
 			StatusChangedAt: timeNow,
 			StatusMessage:   server.statusMessage,
-			AlternativeUrl:  server.alternativeUrl,
+			AlternativeURL:  server.alternativeURL,
 			PublishedAt:     timeNow,
 			UpdatedAt:       timeNow,
 			IsLatest:        true,
@@ -1379,11 +1381,11 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 				assert.Nil(t, result.Meta.Official.StatusMessage)
 			}
 
-			if testServer.alternativeUrl != nil {
-				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-				assert.Equal(t, *testServer.alternativeUrl, *result.Meta.Official.AlternativeUrl)
+			if testServer.alternativeURL != nil {
+				assert.NotNil(t, result.Meta.Official.AlternativeURL)
+				assert.Equal(t, *testServer.alternativeURL, *result.Meta.Official.AlternativeURL)
 			} else {
-				assert.Nil(t, result.Meta.Official.AlternativeUrl)
+				assert.Nil(t, result.Meta.Official.AlternativeURL)
 			}
 		}
 	})
@@ -1404,11 +1406,11 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 				assert.Nil(t, result.Meta.Official.StatusMessage)
 			}
 
-			if testServer.alternativeUrl != nil {
-				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-				assert.Equal(t, *testServer.alternativeUrl, *result.Meta.Official.AlternativeUrl)
+			if testServer.alternativeURL != nil {
+				assert.NotNil(t, result.Meta.Official.AlternativeURL)
+				assert.Equal(t, *testServer.alternativeURL, *result.Meta.Official.AlternativeURL)
 			} else {
-				assert.Nil(t, result.Meta.Official.AlternativeUrl)
+				assert.Nil(t, result.Meta.Official.AlternativeURL)
 			}
 		}
 	})

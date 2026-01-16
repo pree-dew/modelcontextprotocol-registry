@@ -12,7 +12,7 @@ import (
 type StatusChangeRequest struct {
 	NewStatus      model.Status `json:"newStatus"`
 	StatusMessage  *string      `json:"statusMessage,omitempty"`
-	AlternativeUrl *string      `json:"alternativeUrl,omitempty"`
+	AlternativeURL *string      `json:"alternativeUrl,omitempty"`
 	NewName        *string      `json:"newName,omitempty"`
 }
 

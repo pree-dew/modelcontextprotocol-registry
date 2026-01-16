@@ -62,17 +62,15 @@ func TestStatusCommand_Validation(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errorSubstr) {
 					t.Errorf("Expected error containing '%s', got: %v", tt.errorSubstr, err)
 				}
-			} else {
+			} else if err != nil {
 				// For valid args, we expect it to pass validation
 				// It may fail later at auth or API level, which is acceptable
 				// Just check it's not a validation error
-				if err != nil {
-					if strings.Contains(err.Error(), "invalid status") ||
-						strings.Contains(err.Error(), "server name is required") ||
-						strings.Contains(err.Error(), "version is required unless") ||
-						strings.Contains(err.Error(), "--status flag is required") {
-						t.Errorf("Validation failed unexpectedly: %v", err)
-					}
+				if strings.Contains(err.Error(), "invalid status") ||
+					strings.Contains(err.Error(), "server name is required") ||
+					strings.Contains(err.Error(), "version is required unless") ||
+					strings.Contains(err.Error(), "--status flag is required") {
+					t.Errorf("Validation failed unexpectedly: %v", err)
 				}
 			}
 		})
@@ -196,16 +194,14 @@ func TestStatusCommand_AllVersionsFlag(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errorSubstr) {
 					t.Errorf("Expected error containing '%s', got: %v", tt.errorSubstr, err)
 				}
-			} else {
+			} else if err != nil {
 				// Should pass validation
 				// Just check it's not a validation error
-				if err != nil {
-					if strings.Contains(err.Error(), "invalid status") ||
-						strings.Contains(err.Error(), "server name is required") ||
-						strings.Contains(err.Error(), "version is required unless") ||
-						strings.Contains(err.Error(), "--status flag is required") {
-						t.Errorf("Validation failed unexpectedly: %v", err)
-					}
+				if strings.Contains(err.Error(), "invalid status") ||
+					strings.Contains(err.Error(), "server name is required") ||
+					strings.Contains(err.Error(), "version is required unless") ||
+					strings.Contains(err.Error(), "--status flag is required") {
+					t.Errorf("Validation failed unexpectedly: %v", err)
 				}
 			}
 		})

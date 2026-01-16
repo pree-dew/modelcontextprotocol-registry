@@ -10,7 +10,7 @@ type RegistryExtensions struct {
 	Status          model.Status `json:"status" enum:"active,deprecated,yanked" doc:"Server lifecycle status"`
 	StatusChangedAt time.Time    `json:"statusChangedAt" format:"date-time" doc:"Timestamp when the server status was last changed"`
 	StatusMessage   *string      `json:"statusMessage,omitempty" doc:"Optional message explaining status change (e.g., deprecation reason, migration guidance)"`
-	AlternativeUrl  *string      `json:"alternativeUrl,omitempty" format:"uri" doc:"Optional URL to alternative/replacement server for deprecated or yanked servers"`
+	AlternativeURL  *string      `json:"alternativeUrl,omitempty" format:"uri" doc:"Optional URL to alternative/replacement server for deprecated or yanked servers"`
 	NewName         *string      `json:"newName,omitempty" doc:"Optional new server name when server has been renamed"`
 	PublishedAt     time.Time    `json:"publishedAt" format:"date-time" doc:"Timestamp when the server was first published to the registry"`
 	UpdatedAt       time.Time    `json:"updatedAt,omitempty" format:"date-time" doc:"Timestamp when the server entry was last updated"`

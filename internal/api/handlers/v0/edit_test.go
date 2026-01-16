@@ -251,7 +251,7 @@ func TestEditServerEndpoint(t *testing.T) {
 		requestBody    apiv0.ServerJSON
 		statusParam    string
 		statusMessage  string
-		alternativeUrl string
+		alternativeURL string
 		newName        string
 		expectedStatus int
 		expectedError  string
@@ -470,6 +470,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			statusParam:    "active", // Changing from yanked to active should now be allowed
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
 				assert.Equal(t, "Successfully unyanking server", result.Server.Description)
 			},
@@ -494,6 +495,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			statusParam:    "deprecated",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 			},
 		},
@@ -517,6 +519,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			statusParam:    "yanked",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
 			},
 		},
@@ -583,12 +586,12 @@ func TestEditServerEndpoint(t *testing.T) {
 			},
 			statusParam:    "deprecated",
 			statusMessage:  "This server is deprecated",
-			alternativeUrl: "https://example.com/alternative",
+			alternativeURL: "https://example.com/alternative",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
 				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 				assert.NotNil(t, result.Meta.Official.StatusMessage)
-				assert.NotNil(t, result.Meta.Official.AlternativeUrl)
+				assert.NotNil(t, result.Meta.Official.AlternativeURL)
 			},
 		},
 		{
@@ -610,13 +613,13 @@ func TestEditServerEndpoint(t *testing.T) {
 			},
 			statusParam:    "active",
 			statusMessage:  "This should be ignored",            // Should be ignored when transitioning to active
-			alternativeUrl: "https://example.com/should-ignore", // Should be ignored when transitioning to active
+			alternativeURL: "https://example.com/should-ignore", // Should be ignored when transitioning to active
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
 				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
 				// Verify that status_message and alternative_url are nil/empty
 				assert.Nil(t, result.Meta.Official.StatusMessage, "status_message should be nil when transitioning to active")
-				assert.Nil(t, result.Meta.Official.AlternativeUrl, "alternative_url should be nil when transitioning to active")
+				assert.Nil(t, result.Meta.Official.AlternativeURL, "alternative_url should be nil when transitioning to active")
 			},
 		},
 		{
@@ -638,15 +641,15 @@ func TestEditServerEndpoint(t *testing.T) {
 			},
 			statusParam:    "deprecated",
 			statusMessage:  "This server is deprecated. Please migrate.",
-			alternativeUrl: "https://example.com/new-server",
+			alternativeURL: "https://example.com/new-server",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
 				if result != nil && result.Meta.Official != nil {
 					assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 					assert.NotNil(t, result.Meta.Official.StatusMessage)
 					assert.Equal(t, "This server is deprecated. Please migrate.", *result.Meta.Official.StatusMessage)
-					assert.NotNil(t, result.Meta.Official.AlternativeUrl)
-					assert.Equal(t, "https://example.com/new-server", *result.Meta.Official.AlternativeUrl)
+					assert.NotNil(t, result.Meta.Official.AlternativeURL)
+					assert.Equal(t, "https://example.com/new-server", *result.Meta.Official.AlternativeURL)
 				}
 			},
 		},
@@ -832,7 +835,7 @@ func TestEditServerEndpoint(t *testing.T) {
 				// All status fields should be cleared when transitioning to active
 				assert.Nil(t, resp.Meta.Official.NewName)
 				assert.Nil(t, resp.Meta.Official.StatusMessage)
-				assert.Nil(t, resp.Meta.Official.AlternativeUrl)
+				assert.Nil(t, resp.Meta.Official.AlternativeURL)
 			},
 		},
 	}
@@ -860,8 +863,8 @@ func TestEditServerEndpoint(t *testing.T) {
 				if tc.statusMessage != "" {
 					params.Add("status_message", tc.statusMessage)
 				}
-				if tc.alternativeUrl != "" {
-					params.Add("alternative_url", tc.alternativeUrl)
+				if tc.alternativeURL != "" {
+					params.Add("alternative_url", tc.alternativeURL)
 				}
 				if tc.newName != "" {
 					params.Add("new_name", tc.newName)
@@ -1144,9 +1147,4 @@ func TestEditServerEndpointEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, "Updated v1.0.0 specifically", otherVersion.Server.Description)
 	})
-}
-
-// Helper function
-func stringPtr(s string) *string {
-	return &s
 }
