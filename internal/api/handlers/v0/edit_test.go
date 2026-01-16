@@ -609,7 +609,7 @@ func TestEditServerEndpoint(t *testing.T) {
 				Version:     "1.0.0",
 			},
 			statusParam:    "active",
-			statusMessage:  "This should be ignored",           // Should be ignored when transitioning to active
+			statusMessage:  "This should be ignored",            // Should be ignored when transitioning to active
 			alternativeUrl: "https://example.com/should-ignore", // Should be ignored when transitioning to active
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
@@ -690,7 +690,7 @@ func TestEditServerEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"}, {Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-server"},
 				},
 			},
 			requestBody: apiv0.ServerJSON{
@@ -720,7 +720,7 @@ func TestEditServerEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"}, {Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-server"},
 				},
 			},
 			requestBody: apiv0.ServerJSON{
@@ -823,7 +823,7 @@ func TestEditServerEndpoint(t *testing.T) {
 				Description: "Transitioning back to active",
 				Version:     "1.0.0",
 			},
-			statusParam:    "active",
+			statusParam: "active",
 			// No newName provided - should still clear any existing newName in DB
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {

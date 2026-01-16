@@ -60,17 +60,17 @@ func StatusCommand(args []string) error {
 
 	// Validate new-name parameter constraints
 	if *newName != "" {
-		// Validation 1: new-name requires deprecated or yanked status
+		// Validation: new-name requires deprecated or yanked status
 		if *status != "deprecated" && *status != "yanked" {
 			return errors.New("--new-name can only be used with --status deprecated or --status yanked")
 		}
-		// Validation 1: new-name requires --all-versions flag
+		// Validation: new-name requires --all-versions flag
 		if !*allVersions {
 			return errors.New("--new-name requires --all-versions flag")
 		}
 	}
 
-	// Load saved token (following publish.go pattern)
+	// Load saved token
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
@@ -152,7 +152,6 @@ func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, alt
 }
 
 func getAllServerVersions(registryURL, serverName string) ([]string, error) {
-	// Ensure URL format (following publish.go pattern)
 	if !strings.HasSuffix(registryURL, "/") {
 		registryURL += "/"
 	}
@@ -161,7 +160,6 @@ func getAllServerVersions(registryURL, serverName string) ([]string, error) {
 	encodedServerName := url.PathEscape(serverName)
 	versionsURL := registryURL + "v0/servers/" + encodedServerName + "/versions"
 
-	// Create request (following publish.go pattern)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, versionsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
@@ -174,7 +172,6 @@ func getAllServerVersions(registryURL, serverName string) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Read response (following publish.go pattern)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
@@ -200,7 +197,6 @@ func getAllServerVersions(registryURL, serverName string) ([]string, error) {
 }
 
 func updateServerStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token string) error {
-	// Ensure URL format (following publish.go pattern)
 	if !strings.HasSuffix(registryURL, "/") {
 		registryURL += "/"
 	}
@@ -210,7 +206,6 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 	encodedVersion := url.PathEscape(version)
 	getURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion
 
-	// Create GET request (following publish.go pattern)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, getURL, nil)
 	if err != nil {
 		return fmt.Errorf("error creating GET request: %w", err)
@@ -223,7 +218,6 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 	}
 	defer resp.Body.Close()
 
-	// Read response (following publish.go pattern)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("error reading response: %w", err)
@@ -253,13 +247,11 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 	}
 	updateURL += "?" + params.Encode()
 
-	// Serialize the server JSON (following publish.go pattern)
 	jsonData, err := json.Marshal(currentServer.Server)
 	if err != nil {
 		return fmt.Errorf("error serializing server: %w", err)
 	}
 
-	// Create and send PUT request (following publish.go pattern)
 	req, err = http.NewRequestWithContext(context.Background(), http.MethodPut, updateURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("error creating PUT request: %w", err)
@@ -273,7 +265,6 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 	}
 	defer resp.Body.Close()
 
-	// Read response (following publish.go pattern)
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("error reading update response: %w", err)

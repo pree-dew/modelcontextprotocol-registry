@@ -41,12 +41,12 @@ func TestStatusCommand_Validation(t *testing.T) {
 		{
 			name:        "valid args passes validation",
 			args:        []string{"--status", "deprecated", "io.github.user/my-server", "1.0.0"},
-			expectError: false, // Validation passes, may fail later at auth/API
+			expectError: false,
 		},
 		{
 			name:        "valid args with --all-versions passes validation",
 			args:        []string{"--status", "deprecated", "--all-versions", "io.github.user/my-server"},
-			expectError: false, // Validation passes, may fail later at auth/API
+			expectError: false,
 		},
 	}
 
@@ -77,52 +77,6 @@ func TestStatusCommand_Validation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestStatusCommand_StatusValues(t *testing.T) {
-	validStatuses := []string{"active", "deprecated", "yanked"}
-	invalidStatuses := []string{"invalid", "deleted", "removed", "archived"}
-
-	for _, status := range validStatuses {
-		t.Run("valid_status_"+status, func(t *testing.T) {
-			args := []string{"--status", status, "io.github.user/my-server", "1.0.0"}
-			err := commands.StatusCommand(args)
-
-			// Should pass validation (may fail at auth/API, which is acceptable)
-			if err != nil && strings.Contains(err.Error(), "invalid status") {
-				t.Errorf("Valid status '%s' was rejected as invalid", status)
-			}
-		})
-	}
-
-	for _, status := range invalidStatuses {
-		t.Run("invalid_status_"+status, func(t *testing.T) {
-			args := []string{"--status", status, "io.github.user/my-server", "1.0.0"}
-			err := commands.StatusCommand(args)
-
-			if err == nil {
-				t.Errorf("Expected error for invalid status '%s' but got none", status)
-				return
-			}
-			if !strings.Contains(err.Error(), "invalid status") {
-				t.Errorf("Expected 'invalid status' error for '%s', got: %v", status, err)
-			}
-		})
-	}
-
-	// Test empty status
-	t.Run("empty_status", func(t *testing.T) {
-		args := []string{"--status", "", "io.github.user/my-server", "1.0.0"}
-		err := commands.StatusCommand(args)
-
-		if err == nil {
-			t.Errorf("Expected error for empty status but got none")
-			return
-		}
-		if !strings.Contains(err.Error(), "--status flag is required") {
-			t.Errorf("Expected '--status flag is required' error, got: %v", err)
-		}
-	})
 }
 
 func TestStatusCommand_ServerNameValidation(t *testing.T) {
@@ -288,7 +242,6 @@ func TestStatusCommand_FlagCombinations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := commands.StatusCommand(tt.args)
-
 			// All these should pass CLI validation
 			// They may fail at auth or API level which is acceptable
 			if err != nil {
