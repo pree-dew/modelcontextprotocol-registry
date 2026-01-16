@@ -647,6 +647,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			alternativeURL: "https://example.com/new-server",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				if result != nil && result.Meta.Official != nil {
 					assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 					assert.NotNil(t, result.Meta.Official.StatusMessage)
