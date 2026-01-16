@@ -492,7 +492,7 @@ func TestPostgreSQL_SetServerStatus(t *testing.T) {
 
 	// Setup test data
 	serverName := "com.example/status-test-server"
-	version := "1.0.0"
+	version := testVersion100
 	serverJSON := &apiv0.ServerJSON{
 		Name:        serverName,
 		Description: "A server for status testing",

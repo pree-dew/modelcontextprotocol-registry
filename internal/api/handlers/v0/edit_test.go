@@ -543,6 +543,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			statusParam:    "active",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
 			},
 		},
@@ -589,6 +590,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			alternativeURL: "https://example.com/alternative",
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
 				assert.NotNil(t, result.Meta.Official.StatusMessage)
 				assert.NotNil(t, result.Meta.Official.AlternativeURL)
@@ -616,6 +618,7 @@ func TestEditServerEndpoint(t *testing.T) {
 			alternativeURL: "https://example.com/should-ignore", // Should be ignored when transitioning to active
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+				t.Helper()
 				assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
 				// Verify that status_message and alternative_url are nil/empty
 				assert.Nil(t, result.Meta.Official.StatusMessage, "status_message should be nil when transitioning to active")
