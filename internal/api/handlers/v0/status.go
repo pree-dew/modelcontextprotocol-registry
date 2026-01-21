@@ -113,9 +113,7 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 			currentStatus := currentServer.Meta.Official.Status
 			if !isValidStatusTransition(currentStatus, newStatus) {
 				// Allow same-status transitions only if metadata fields are being updated
-				if currentStatus == newStatus && hasMetadataFieldsToUpdate(input.Body) {
-					// Same status with metadata updates is allowed
-				} else {
+				if !(currentStatus == newStatus && hasMetadataFieldsToUpdate(input.Body)) {
 					return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
 				}
 			}

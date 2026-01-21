@@ -1739,9 +1739,9 @@ func TestPostgreSQL_IncludeYankedFilter(t *testing.T) {
 			version string
 			status  model.Status
 		}{
-			{"1.0.0", model.StatusYanked},  // Old version, yanked
-			{"1.1.0", model.StatusActive},  // Current stable
-			{"2.0.0", model.StatusActive},  // Latest
+			{"1.0.0", model.StatusYanked}, // Old version, yanked
+			{"1.1.0", model.StatusActive}, // Current stable
+			{"2.0.0", model.StatusActive}, // Latest
 		}
 
 		for i, v := range versionsData {

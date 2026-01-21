@@ -79,6 +79,73 @@ func NewPostgreSQL(ctx context.Context, connectionURI string) (*PostgreSQL, erro
 	}, nil
 }
 
+// buildFilterConditions constructs WHERE clause conditions from a ServerFilter
+func buildFilterConditions(filter *ServerFilter, argIndex int) ([]string, []any, int) {
+	var conditions []string
+	var args []any
+
+	if filter == nil {
+		return conditions, args, argIndex
+	}
+
+	if filter.Name != nil {
+		conditions = append(conditions, fmt.Sprintf("server_name = $%d", argIndex))
+		args = append(args, *filter.Name)
+		argIndex++
+	}
+	if filter.RemoteURL != nil {
+		conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(value->'remotes') AS remote WHERE remote->>'url' = $%d)", argIndex))
+		args = append(args, *filter.RemoteURL)
+		argIndex++
+	}
+	if filter.UpdatedSince != nil {
+		conditions = append(conditions, fmt.Sprintf("updated_at > $%d", argIndex))
+		args = append(args, *filter.UpdatedSince)
+		argIndex++
+	}
+	if filter.SubstringName != nil {
+		conditions = append(conditions, fmt.Sprintf("server_name ILIKE $%d", argIndex))
+		args = append(args, "%"+*filter.SubstringName+"%")
+		argIndex++
+	}
+	if filter.Version != nil {
+		conditions = append(conditions, fmt.Sprintf("version = $%d", argIndex))
+		args = append(args, *filter.Version)
+		argIndex++
+	}
+	if filter.IsLatest != nil {
+		conditions = append(conditions, fmt.Sprintf("is_latest = $%d", argIndex))
+		args = append(args, *filter.IsLatest)
+		argIndex++
+	}
+	if filter.IncludeYanked == nil || !*filter.IncludeYanked {
+		conditions = append(conditions, "status != 'yanked'")
+	}
+
+	return conditions, args, argIndex
+}
+
+// addCursorCondition adds pagination cursor condition to WHERE clause
+func addCursorCondition(cursor string, argIndex int) (string, []any, int) {
+	if cursor == "" {
+		return "", nil, argIndex
+	}
+
+	// Parse cursor format: "serverName:version"
+	parts := strings.SplitN(cursor, ":", 2)
+	if len(parts) == 2 {
+		cursorServerName := parts[0]
+		cursorVersion := parts[1]
+		// Use compound condition: (server_name > cursor_name) OR (server_name = cursor_name AND version > cursor_version)
+		condition := fmt.Sprintf("(server_name > $%d OR (server_name = $%d AND version > $%d))", argIndex, argIndex+1, argIndex+2)
+		return condition, []any{cursorServerName, cursorServerName, cursorVersion}, argIndex + 3
+	}
+
+	// Fallback for malformed cursor - treat as server name only for backwards compatibility
+	condition := fmt.Sprintf("server_name > $%d", argIndex)
+	return condition, []any{cursor}, argIndex + 1
+}
+
 func (db *PostgreSQL) ListServers(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -94,67 +161,17 @@ func (db *PostgreSQL) ListServers(
 		return nil, "", ctx.Err()
 	}
 
-	// Build WHERE clause for filtering using dedicated columns
-	var whereConditions []string
-	args := []any{}
+	// Build WHERE clause conditions
 	argIndex := 1
+	whereConditions, args, argIndex := buildFilterConditions(filter, argIndex)
 
-	// Add filters using dedicated columns for better performance
-	if filter != nil {
-		if filter.Name != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("server_name = $%d", argIndex))
-			args = append(args, *filter.Name)
-			argIndex++
-		}
-		if filter.RemoteURL != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(value->'remotes') AS remote WHERE remote->>'url' = $%d)", argIndex))
-			args = append(args, *filter.RemoteURL)
-			argIndex++
-		}
-		if filter.UpdatedSince != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("updated_at > $%d", argIndex))
-			args = append(args, *filter.UpdatedSince)
-			argIndex++
-		}
-		if filter.SubstringName != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("server_name ILIKE $%d", argIndex))
-			args = append(args, "%"+*filter.SubstringName+"%")
-			argIndex++
-		}
-		if filter.Version != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("version = $%d", argIndex))
-			args = append(args, *filter.Version)
-			argIndex++
-		}
-		if filter.IsLatest != nil {
-			whereConditions = append(whereConditions, fmt.Sprintf("is_latest = $%d", argIndex))
-			args = append(args, *filter.IsLatest)
-			argIndex++
-		}
-		if filter.IncludeYanked == nil || !*filter.IncludeYanked {
-			whereConditions = append(whereConditions, "status != 'yanked'")
-		}
+	// Add cursor pagination
+	cursorCondition, cursorArgs, argIndex := addCursorCondition(cursor, argIndex)
+	if cursorCondition != "" {
+		whereConditions = append(whereConditions, cursorCondition)
+		args = append(args, cursorArgs...)
 	}
-
-	// Add cursor pagination using compound serverName:version cursor
-	if cursor != "" {
-		// Parse cursor format: "serverName:version"
-		parts := strings.SplitN(cursor, ":", 2)
-		if len(parts) == 2 {
-			cursorServerName := parts[0]
-			cursorVersion := parts[1]
-
-			// Use compound condition: (server_name > cursor_name) OR (server_name = cursor_name AND version > cursor_version)
-			whereConditions = append(whereConditions, fmt.Sprintf("(server_name > $%d OR (server_name = $%d AND version > $%d))", argIndex, argIndex+1, argIndex+2))
-			args = append(args, cursorServerName, cursorServerName, cursorVersion)
-			argIndex += 3
-		} else {
-			// Fallback for malformed cursor - treat as server name only for backwards compatibility
-			whereConditions = append(whereConditions, fmt.Sprintf("server_name > $%d", argIndex))
-			args = append(args, cursor)
-			argIndex++
-		}
-	}
+	_ = argIndex // Silence unused variable warning
 
 	// Build the WHERE clause
 	whereClause := ""
