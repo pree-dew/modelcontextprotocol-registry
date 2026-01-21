@@ -34,6 +34,28 @@ type UpdateServerStatusInput struct {
 	Body          UpdateServerStatusBody `body:""`
 }
 
+// validateStatusTransition validates if the status transition is allowed
+func validateStatusTransition(currentServer *apiv0.ServerResponse, newStatus model.Status, body UpdateServerStatusBody) error {
+	if currentServer.Meta.Official == nil {
+		return nil
+	}
+
+	currentStatus := currentServer.Meta.Official.Status
+	isSameStatus := currentStatus == newStatus
+
+	// Reject same-status requests with no metadata updates (pointless no-op)
+	if isSameStatus && !hasMetadataFieldsToUpdate(body) {
+		return huma.Error400BadRequest(fmt.Sprintf("No changes to apply: status is already %s", currentStatus))
+	}
+
+	// Reject invalid status transitions (e.g., invalid status values)
+	if !isSameStatus && !isValidStatusTransition(currentStatus, newStatus) {
+		return huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
+	}
+
+	return nil
+}
+
 // RegisterStatusEndpoints registers the status update endpoint with a custom path prefix
 func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.RegistryService, cfg *config.Config) {
 	jwtManager := auth.NewJWTManager(cfg)
@@ -118,19 +140,8 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 		}
 
 		// Validate status transition is allowed
-		if currentServer.Meta.Official != nil {
-			currentStatus := currentServer.Meta.Official.Status
-			isSameStatus := currentStatus == newStatus
-
-			// Reject same-status requests with no metadata updates (pointless no-op)
-			if isSameStatus && !hasMetadataFieldsToUpdate(input.Body) {
-				return nil, huma.Error400BadRequest(fmt.Sprintf("No changes to apply: status is already %s", currentStatus))
-			}
-
-			// Reject invalid status transitions (e.g., invalid status values)
-			if !isSameStatus && !isValidStatusTransition(currentStatus, newStatus) {
-				return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
-			}
+		if err := validateStatusTransition(currentServer, newStatus, input.Body); err != nil {
+			return nil, err
 		}
 
 		// Build status change request
