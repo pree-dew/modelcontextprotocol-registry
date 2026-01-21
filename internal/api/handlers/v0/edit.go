@@ -14,7 +14,6 @@ import (
 	"github.com/modelcontextprotocol/registry/internal/database"
 	"github.com/modelcontextprotocol/registry/internal/service"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
-	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
 // EditServerInput represents the input for editing a server
@@ -104,25 +103,4 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 			Body: *updatedServer,
 		}, nil
 	})
-}
-
-// isValidStatusTransition checks if a status transition is allowed
-// Allowed transitions:
-// - active ↔ deprecated ↔ yanked (all bidirectional transitions allowed)
-// - Same status transitions are NOT allowed (no-op)
-func isValidStatusTransition(currentStatus, newStatus model.Status) bool {
-	// Same status transition is not allowed (no-op)
-	if currentStatus == newStatus {
-		return false
-	}
-
-	// All transitions between active, deprecated, and yanked are allowed
-	validStatuses := map[model.Status]bool{
-		model.StatusActive:     true,
-		model.StatusDeprecated: true,
-		model.StatusYanked:     true,
-	}
-
-	// Both current and new status must be valid
-	return validStatuses[currentStatus] && validStatuses[newStatus]
 }

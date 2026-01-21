@@ -76,13 +76,33 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
 		}
 
-		// Get current server to check permissions and current status
-		currentServer, err := registry.GetServerByNameAndVersion(ctx, serverName, version)
+		newStatus := model.Status(input.Body.Status)
+
+		// Get all versions - gives us both the server data and version count in one DB call
+		allVersions, err := registry.GetAllVersionsByServerName(ctx, serverName)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
 			}
-			return nil, huma.Error500InternalServerError("Failed to get current server", err)
+			return nil, huma.Error500InternalServerError("Failed to get server versions", err)
+		}
+
+		// Check newName validation first (before version check) for better error messages
+		hasNewName := input.Body.NewName != nil && *input.Body.NewName != ""
+		if hasNewName && len(allVersions) > 1 {
+			return nil, huma.Error400BadRequest("new_name cannot be used with single version endpoint when server has multiple versions. Use the all-versions endpoint instead: PATCH /servers/{serverName}/status")
+		}
+
+		// Find the requested version
+		var currentServer *apiv0.ServerResponse
+		for _, v := range allVersions {
+			if v.Server.Version == version {
+				currentServer = v
+				break
+			}
+		}
+		if currentServer == nil {
+			return nil, huma.Error404NotFound("Server version not found")
 		}
 
 		// Verify edit permissions for this server
@@ -90,32 +110,26 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 			return nil, huma.Error403Forbidden("You do not have edit permissions for this server")
 		}
 
-		newStatus := model.Status(input.Body.Status)
-
-		// Validate newName if provided (check this first for better error messages)
-		if input.Body.NewName != nil && *input.Body.NewName != "" {
+		// Validate newName if provided
+		if hasNewName {
 			if err := validateNewNameForStatus(ctx, input.Body, serverName, registry, jwtManager, claims); err != nil {
 				return nil, err
-			}
-
-			// Check if server has multiple versions - newName requires all-versions endpoint
-			allVersions, err := registry.GetAllVersionsByServerName(ctx, serverName)
-			if err != nil {
-				return nil, huma.Error500InternalServerError("Failed to check server versions", err)
-			}
-			if len(allVersions) > 1 {
-				return nil, huma.Error400BadRequest("new_name cannot be used with single version endpoint when server has multiple versions. Use the all-versions endpoint instead: PATCH /servers/{serverName}/status")
 			}
 		}
 
 		// Validate status transition is allowed
 		if currentServer.Meta.Official != nil {
 			currentStatus := currentServer.Meta.Official.Status
-			if !isValidStatusTransition(currentStatus, newStatus) {
-				// Allow same-status transitions only if metadata fields are being updated
-				if currentStatus != newStatus || !hasMetadataFieldsToUpdate(input.Body) {
-					return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
-				}
+			isSameStatus := currentStatus == newStatus
+
+			// Reject same-status requests with no metadata updates (pointless no-op)
+			if isSameStatus && !hasMetadataFieldsToUpdate(input.Body) {
+				return nil, huma.Error400BadRequest(fmt.Sprintf("No changes to apply: status is already %s", currentStatus))
+			}
+
+			// Reject invalid status transitions (e.g., invalid status values)
+			if !isSameStatus && !isValidStatusTransition(currentStatus, newStatus) {
+				return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
 			}
 		}
 
@@ -293,4 +307,25 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 			},
 		}, nil
 	})
+}
+
+// isValidStatusTransition checks if a status transition is allowed
+// Allowed transitions:
+// - active ↔ deprecated ↔ yanked (all bidirectional transitions allowed)
+// - Same status transitions are NOT allowed (no-op)
+func isValidStatusTransition(currentStatus, newStatus model.Status) bool {
+	// Same status transition is not allowed (no-op)
+	if currentStatus == newStatus {
+		return false
+	}
+
+	// All transitions between active, deprecated, and yanked are allowed
+	validStatuses := map[model.Status]bool{
+		model.StatusActive:     true,
+		model.StatusDeprecated: true,
+		model.StatusYanked:     true,
+	}
+
+	// Both current and new status must be valid
+	return validStatuses[currentStatus] && validStatuses[newStatus]
 }

@@ -618,7 +618,7 @@ func TestUpdateServerStatusEndpointSameStatusTransition(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "Invalid status transition from active to active")
+	assert.Contains(t, w.Body.String(), "No changes to apply: status is already active")
 }
 
 func TestUpdateServerStatusEndpointURLEncoding(t *testing.T) {
