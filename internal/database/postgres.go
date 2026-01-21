@@ -131,6 +131,9 @@ func (db *PostgreSQL) ListServers(
 			args = append(args, *filter.IsLatest)
 			argIndex++
 		}
+		if filter.IncludeYanked == nil || !*filter.IncludeYanked {
+			whereConditions = append(whereConditions, "status != 'yanked'")
+		}
 	}
 
 	// Add cursor pagination using compound serverName:version cursor
@@ -573,6 +576,73 @@ func (db *PostgreSQL) SetServerStatus(ctx context.Context, tx pgx.Tx, serverName
 	}
 
 	return serverResponse, nil
+}
+
+// SetAllVersionsStatus updates the status of all versions of a server in a single query
+func (db *PostgreSQL) SetAllVersionsStatus(ctx context.Context, tx pgx.Tx, serverName string, status model.Status, statusMessage, alternativeURL, newName *string) ([]*apiv0.ServerResponse, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	// Update the status and related fields for all versions
+	query := `
+		UPDATE servers
+		SET status = $1, status_changed_at = NOW(), updated_at = NOW(), status_message = $2, alternative_url = $3, new_name = $4
+		WHERE server_name = $5
+		RETURNING server_name, version, status, value, published_at, updated_at, is_latest, status_changed_at, status_message, alternative_url, new_name
+	`
+
+	rows, err := db.getExecutor(tx).Query(ctx, query, string(status), statusMessage, alternativeURL, newName, serverName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update all server versions status: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*apiv0.ServerResponse
+	for rows.Next() {
+		var name, vers, currentStatus string
+		var publishedAt, updatedAt, statusChangedAt time.Time
+		var isLatest bool
+		var valueJSON []byte
+		var resultStatusMessage, resultAlternativeURL, resultNewName *string
+
+		if err := rows.Scan(&name, &vers, &currentStatus, &valueJSON, &publishedAt, &updatedAt, &isLatest, &statusChangedAt, &resultStatusMessage, &resultAlternativeURL, &resultNewName); err != nil {
+			return nil, fmt.Errorf("failed to scan server row: %w", err)
+		}
+
+		// Unmarshal the JSON data
+		var serverJSON apiv0.ServerJSON
+		if err := json.Unmarshal(valueJSON, &serverJSON); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal server JSON: %w", err)
+		}
+
+		serverResponse := &apiv0.ServerResponse{
+			Server: serverJSON,
+			Meta: apiv0.ResponseMeta{
+				Official: &apiv0.RegistryExtensions{
+					Status:          model.Status(currentStatus),
+					StatusChangedAt: statusChangedAt,
+					StatusMessage:   resultStatusMessage,
+					AlternativeURL:  resultAlternativeURL,
+					NewName:         resultNewName,
+					PublishedAt:     publishedAt,
+					UpdatedAt:       updatedAt,
+					IsLatest:        isLatest,
+				},
+			},
+		}
+		results = append(results, serverResponse)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating server rows: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil, ErrNotFound
+	}
+
+	return results, nil
 }
 
 // InTransaction executes a function within a database transaction

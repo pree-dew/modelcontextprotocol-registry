@@ -392,6 +392,117 @@ func TestGetAllVersionsEndpoint(t *testing.T) {
 	}
 }
 
+func TestListServersYankedFiltering(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+
+	// Setup test data: 2 active servers and 1 yanked server
+	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/active-server-1",
+		Description: "Active server 1",
+		Version:     "1.0.0",
+	})
+	require.NoError(t, err)
+
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/active-server-2",
+		Description: "Active server 2",
+		Version:     "1.0.0",
+	})
+	require.NoError(t, err)
+
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/yanked-server",
+		Description: "Yanked server",
+		Version:     "1.0.0",
+	})
+	require.NoError(t, err)
+
+	// Yank the third server
+	_, err = registryService.UpdateServerStatus(ctx, "com.example/yanked-server", "1.0.0", &service.StatusChangeRequest{
+		NewStatus: model.StatusYanked,
+	})
+	require.NoError(t, err)
+
+	// Create API
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterServersEndpoints(api, "/v0", registryService)
+
+	tests := []struct {
+		name           string
+		queryParams    string
+		expectedStatus int
+		expectedCount  int
+		checkYanked    bool // whether yanked server should be in results
+	}{
+		{
+			name:           "default excludes yanked servers",
+			queryParams:    "",
+			expectedStatus: http.StatusOK,
+			expectedCount:  2,
+			checkYanked:    false,
+		},
+		{
+			name:           "include_yanked=false excludes yanked servers",
+			queryParams:    "?include_yanked=false",
+			expectedStatus: http.StatusOK,
+			expectedCount:  2,
+			checkYanked:    false,
+		},
+		{
+			name:           "include_yanked=true includes yanked servers",
+			queryParams:    "?include_yanked=true",
+			expectedStatus: http.StatusOK,
+			expectedCount:  3,
+			checkYanked:    true,
+		},
+		{
+			name:           "updated_since always includes yanked servers",
+			queryParams:    "?updated_since=1990-01-01T00:00:00Z",
+			expectedStatus: http.StatusOK,
+			expectedCount:  3,
+			checkYanked:    true,
+		},
+		{
+			name:           "updated_since overrides include_yanked=false",
+			queryParams:    "?updated_since=1990-01-01T00:00:00Z&include_yanked=false",
+			expectedStatus: http.StatusOK,
+			expectedCount:  3,
+			checkYanked:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v0/servers"+tt.queryParams, nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var resp apiv0.ServerListResponse
+			err := json.NewDecoder(w.Body).Decode(&resp)
+			assert.NoError(t, err)
+			assert.Len(t, resp.Servers, tt.expectedCount)
+
+			// Check if yanked server is in results
+			hasYanked := false
+			for _, server := range resp.Servers {
+				if server.Server.Name == "com.example/yanked-server" {
+					hasYanked = true
+					assert.Equal(t, model.StatusYanked, server.Meta.Official.Status)
+				}
+			}
+			assert.Equal(t, tt.checkYanked, hasYanked, "Yanked server presence mismatch")
+		})
+	}
+}
+
 func TestServersEndpointEdgeCases(t *testing.T) {
 	ctx := context.Background()
 	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())

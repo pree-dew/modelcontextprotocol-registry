@@ -13,9 +13,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
+
+// StatusUpdateRequest represents the request body for status update endpoints
+type StatusUpdateRequest struct {
+	Status         string  `json:"status"`
+	StatusMessage  *string `json:"statusMessage,omitempty"`
+	AlternativeURL *string `json:"alternativeUrl,omitempty"`
+	NewName        *string `json:"newName,omitempty"`
+}
+
+// AllVersionsStatusResponse represents the response from the all-versions status endpoint
+type AllVersionsStatusResponse struct {
+	UpdatedCount int `json:"updatedCount"`
+}
 
 func StatusCommand(args []string) error {
 	// Parse command flags
@@ -115,106 +126,46 @@ func updateVersionStatus(registryURL, serverName, version, status, statusMessage
 }
 
 func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, alternativeURL, newName, token string) error {
-	_, _ = fmt.Fprintf(os.Stdout, "Fetching all versions of %s...\n", serverName)
+	_, _ = fmt.Fprintf(os.Stdout, "Updating all versions of %s to status: %s\n", serverName, status)
 
-	// Get all versions of the server
-	versions, err := getAllServerVersions(registryURL, serverName)
-	if err != nil {
-		return fmt.Errorf("failed to get server versions: %w", err)
-	}
-
-	if len(versions) == 0 {
-		return fmt.Errorf("no versions found for server %s", serverName)
-	}
-
-	_, _ = fmt.Fprintf(os.Stdout, "Found %d version(s). Updating all to status: %s\n", len(versions), status)
-
-	// Update each version
-	successCount := 0
-	failureCount := 0
-	for _, v := range versions {
-		_, _ = fmt.Fprintf(os.Stdout, "  Updating version %s...", v)
-		if err := updateServerStatus(registryURL, serverName, v, status, statusMessage, alternativeURL, newName, token); err != nil {
-			_, _ = fmt.Fprintf(os.Stdout, " ✗ Failed: %v\n", err)
-			failureCount++
-		} else {
-			_, _ = fmt.Fprintln(os.Stdout, " ✓")
-			successCount++
-		}
-	}
-
-	_, _ = fmt.Fprintf(os.Stdout, "\nCompleted: %d succeeded, %d failed\n", successCount, failureCount)
-	if failureCount > 0 {
-		return fmt.Errorf("%d version(s) failed to update", failureCount)
-	}
-
-	return nil
-}
-
-func getAllServerVersions(registryURL, serverName string) ([]string, error) {
 	if !strings.HasSuffix(registryURL, "/") {
 		registryURL += "/"
+	}
+
+	// Build the request body
+	requestBody := StatusUpdateRequest{
+		Status: status,
+	}
+	if statusMessage != "" {
+		requestBody.StatusMessage = &statusMessage
+	}
+	if alternativeURL != "" {
+		requestBody.AlternativeURL = &alternativeURL
+	}
+	if newName != "" {
+		requestBody.NewName = &newName
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("error serializing request: %w", err)
 	}
 
 	// URL encode the server name
 	encodedServerName := url.PathEscape(serverName)
-	versionsURL := registryURL + "v0/servers/" + encodedServerName + "/versions"
+	statusURL := registryURL + "v0/servers/" + encodedServerName + "/status"
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, versionsURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, statusURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return fmt.Errorf("error creating request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, body)
-	}
-
-	var response struct {
-		Servers []apiv0.ServerResponse `json:"servers"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("error parsing response: %w", err)
-	}
-
-	versions := make([]string, 0, len(response.Servers))
-	for _, server := range response.Servers {
-		versions = append(versions, server.Server.Version)
-	}
-
-	return versions, nil
-}
-
-func updateServerStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token string) error {
-	if !strings.HasSuffix(registryURL, "/") {
-		registryURL += "/"
-	}
-
-	// First, get the current server details
-	encodedServerName := url.PathEscape(serverName)
-	encodedVersion := url.PathEscape(version)
-	getURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, getURL, nil)
-	if err != nil {
-		return fmt.Errorf("error creating GET request: %w", err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error getting current server: %w", err)
+		return fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -227,47 +178,64 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 		return fmt.Errorf("server returned status %d: %s", resp.StatusCode, body)
 	}
 
-	var currentServer apiv0.ServerResponse
-	if err := json.Unmarshal(body, &currentServer); err != nil {
-		return fmt.Errorf("error parsing current server: %w", err)
+	// Parse response to get updated count
+	var response AllVersionsStatusResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		// If we can't parse the response, just report success
+		_, _ = fmt.Fprintln(os.Stdout, "✓ Successfully updated all versions")
+		return nil
 	}
 
-	// Build the update URL with query parameters
-	updateURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion
-	params := url.Values{}
-	params.Add("status", status)
+	_, _ = fmt.Fprintf(os.Stdout, "✓ Successfully updated %d version(s)\n", response.UpdatedCount)
+	return nil
+}
+
+func updateServerStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token string) error {
+	if !strings.HasSuffix(registryURL, "/") {
+		registryURL += "/"
+	}
+
+	// Build the request body
+	requestBody := StatusUpdateRequest{
+		Status: status,
+	}
 	if statusMessage != "" {
-		params.Add("status_message", statusMessage)
+		requestBody.StatusMessage = &statusMessage
 	}
 	if alternativeURL != "" {
-		params.Add("alternative_url", alternativeURL)
+		requestBody.AlternativeURL = &alternativeURL
 	}
 	if newName != "" {
-		params.Add("new_name", newName)
-	}
-	updateURL += "?" + params.Encode()
-
-	jsonData, err := json.Marshal(currentServer.Server)
-	if err != nil {
-		return fmt.Errorf("error serializing server: %w", err)
+		requestBody.NewName = &newName
 	}
 
-	req, err = http.NewRequestWithContext(context.Background(), http.MethodPut, updateURL, bytes.NewBuffer(jsonData))
+	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
-		return fmt.Errorf("error creating PUT request: %w", err)
+		return fmt.Errorf("error serializing request: %w", err)
+	}
+
+	// URL encode the server name and version
+	encodedServerName := url.PathEscape(serverName)
+	encodedVersion := url.PathEscape(version)
+	statusURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion + "/status"
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, statusURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err = client.Do(req)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error sending update request: %w", err)
+		return fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error reading update response: %w", err)
+		return fmt.Errorf("error reading response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {

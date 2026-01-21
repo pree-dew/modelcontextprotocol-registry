@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/modelcontextprotocol/registry/internal/config"
 )
 
@@ -17,7 +18,9 @@ type PermissionAction string
 
 const (
 	PermissionActionPublish PermissionAction = "publish"
-	// Intended for admins taking moderation actions only, at least for now
+	// PermissionActionEdit allows editing server configuration and status.
+	// Can be scoped to a namespace (e.g., "io.github.username/*") for server owners,
+	// or global ("*") for admins.
 	PermissionActionEdit PermissionAction = "edit"
 )
 
@@ -128,7 +131,6 @@ func (j *JWTManager) ValidateToken(_ context.Context, tokenString string) (*JWTC
 		jwt.WithValidMethods([]string{"EdDSA"}),
 		jwt.WithExpirationRequired(),
 	)
-
 	// Validate token
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)

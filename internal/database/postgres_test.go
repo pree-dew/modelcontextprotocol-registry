@@ -1416,6 +1416,369 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 	})
 }
 
+func TestPostgreSQL_SetAllVersionsStatus(t *testing.T) {
+	db := database.NewTestDB(t)
+	ctx := context.Background()
+	timeNow := time.Now()
+
+	t.Run("update all versions status successfully", func(t *testing.T) {
+		serverName := "com.example/all-versions-status-test"
+		versions := []string{"1.0.0", "1.1.0", "2.0.0"}
+
+		// Create multiple versions
+		for i, version := range versions {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        serverName,
+				Description: "Test server for all-versions status update",
+				Version:     version,
+			}
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        i == len(versions)-1,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			require.NoError(t, err)
+		}
+
+		// Update all versions to deprecated
+		statusMessage := "All versions deprecated"
+		alternativeURL := "https://example.com/new-server"
+
+		results, err := db.SetAllVersionsStatus(ctx, nil, serverName, model.StatusDeprecated, &statusMessage, &alternativeURL, nil)
+		assert.NoError(t, err)
+		assert.Len(t, results, 3)
+
+		// Verify all versions were updated
+		for _, result := range results {
+			assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+			assert.NotNil(t, result.Meta.Official.StatusMessage)
+			assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
+			assert.NotNil(t, result.Meta.Official.AlternativeURL)
+			assert.Equal(t, alternativeURL, *result.Meta.Official.AlternativeURL)
+		}
+
+		// Verify by fetching each version individually
+		for _, version := range versions {
+			server, err := db.GetServerByNameAndVersion(ctx, nil, serverName, version)
+			require.NoError(t, err)
+			assert.Equal(t, model.StatusDeprecated, server.Meta.Official.Status)
+			assert.NotNil(t, server.Meta.Official.StatusMessage)
+			assert.Equal(t, statusMessage, *server.Meta.Official.StatusMessage)
+		}
+	})
+
+	t.Run("update all versions with newName", func(t *testing.T) {
+		serverName := "com.example/all-versions-newname-test"
+		newServerName := "com.example/replacement-server"
+
+		// Create the old server with multiple versions
+		for i, version := range []string{"1.0.0", "2.0.0"} {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        serverName,
+				Description: "Old server",
+				Version:     version,
+			}
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        i == 1,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			require.NoError(t, err)
+		}
+
+		// Create the replacement server (so newName validation would pass at API level)
+		_, err := db.CreateServer(ctx, nil, &apiv0.ServerJSON{
+			Name:        newServerName,
+			Description: "Replacement server",
+			Version:     "1.0.0",
+		}, &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		})
+		require.NoError(t, err)
+
+		// Update all versions to deprecated with newName
+		statusMessage := "Server renamed"
+		results, err := db.SetAllVersionsStatus(ctx, nil, serverName, model.StatusDeprecated, &statusMessage, nil, &newServerName)
+		assert.NoError(t, err)
+		assert.Len(t, results, 2)
+
+		// Verify newName is set on all versions
+		for _, result := range results {
+			assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+			assert.NotNil(t, result.Meta.Official.NewName)
+			assert.Equal(t, newServerName, *result.Meta.Official.NewName)
+		}
+	})
+
+	t.Run("update non-existent server returns error", func(t *testing.T) {
+		results, err := db.SetAllVersionsStatus(ctx, nil, "com.example/non-existent-server", model.StatusDeprecated, nil, nil, nil)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrNotFound)
+		assert.Nil(t, results)
+	})
+
+	t.Run("update all versions to yanked", func(t *testing.T) {
+		serverName := "com.example/all-versions-yanked-test"
+
+		// Create multiple versions
+		for i, version := range []string{"1.0.0", "1.1.0"} {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        serverName,
+				Description: "Test server for yanking",
+				Version:     version,
+			}
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          model.StatusActive,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        i == 1,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			require.NoError(t, err)
+		}
+
+		// Yank all versions
+		statusMessage := "Critical security vulnerability"
+		results, err := db.SetAllVersionsStatus(ctx, nil, serverName, model.StatusYanked, &statusMessage, nil, nil)
+		assert.NoError(t, err)
+		assert.Len(t, results, 2)
+
+		// Verify all versions are yanked
+		for _, result := range results {
+			assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
+			assert.NotNil(t, result.Meta.Official.StatusMessage)
+			assert.Equal(t, statusMessage, *result.Meta.Official.StatusMessage)
+		}
+	})
+
+	t.Run("transition from yanked back to active", func(t *testing.T) {
+		serverName := "com.example/all-versions-reactivate-test"
+
+		// Create server in yanked state
+		for i, version := range []string{"1.0.0", "2.0.0"} {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        serverName,
+				Description: "Test server for reactivation",
+				Version:     version,
+			}
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          model.StatusYanked,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        i == 1,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			require.NoError(t, err)
+		}
+
+		// Reactivate all versions
+		results, err := db.SetAllVersionsStatus(ctx, nil, serverName, model.StatusActive, nil, nil, nil)
+		assert.NoError(t, err)
+		assert.Len(t, results, 2)
+
+		// Verify all versions are active and metadata is cleared
+		for _, result := range results {
+			assert.Equal(t, model.StatusActive, result.Meta.Official.Status)
+			assert.Nil(t, result.Meta.Official.StatusMessage)
+			assert.Nil(t, result.Meta.Official.AlternativeURL)
+			assert.Nil(t, result.Meta.Official.NewName)
+		}
+	})
+}
+
+func TestPostgreSQL_IncludeYankedFilter(t *testing.T) {
+	db := database.NewTestDB(t)
+	ctx := context.Background()
+	timeNow := time.Now()
+
+	// Create test servers with different statuses
+	testServers := []struct {
+		name    string
+		version string
+		status  model.Status
+	}{
+		{
+			name:    "com.example/yanked-filter-active",
+			version: "1.0.0",
+			status:  model.StatusActive,
+		},
+		{
+			name:    "com.example/yanked-filter-deprecated",
+			version: "1.0.0",
+			status:  model.StatusDeprecated,
+		},
+		{
+			name:    "com.example/yanked-filter-yanked",
+			version: "1.0.0",
+			status:  model.StatusYanked,
+		},
+	}
+
+	// Create all test servers
+	for _, server := range testServers {
+		serverJSON := &apiv0.ServerJSON{
+			Name:        server.name,
+			Description: "Test server for include yanked filter",
+			Version:     server.version,
+		}
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          server.status,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+	}
+
+	t.Run("excludes yanked by default (nil IncludeYanked)", func(t *testing.T) {
+		filter := &database.ServerFilter{
+			SubstringName: stringPtr("yanked-filter"),
+		}
+
+		results, _, err := db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+
+		// Should only get active and deprecated servers
+		assert.Len(t, results, 2)
+
+		for _, result := range results {
+			assert.NotEqual(t, model.StatusYanked, result.Meta.Official.Status,
+				"Yanked servers should be excluded by default")
+		}
+
+		// Verify we got the expected servers
+		names := make([]string, len(results))
+		for i, r := range results {
+			names[i] = r.Server.Name
+		}
+		assert.Contains(t, names, "com.example/yanked-filter-active")
+		assert.Contains(t, names, "com.example/yanked-filter-deprecated")
+	})
+
+	t.Run("excludes yanked when IncludeYanked is false", func(t *testing.T) {
+		filter := &database.ServerFilter{
+			SubstringName: stringPtr("yanked-filter"),
+			IncludeYanked: boolPtr(false),
+		}
+
+		results, _, err := db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+
+		// Should only get active and deprecated servers
+		assert.Len(t, results, 2)
+
+		for _, result := range results {
+			assert.NotEqual(t, model.StatusYanked, result.Meta.Official.Status,
+				"Yanked servers should be excluded when IncludeYanked is false")
+		}
+	})
+
+	t.Run("includes yanked when IncludeYanked is true", func(t *testing.T) {
+		filter := &database.ServerFilter{
+			SubstringName: stringPtr("yanked-filter"),
+			IncludeYanked: boolPtr(true),
+		}
+
+		results, _, err := db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+
+		// Should get all servers including yanked
+		assert.Len(t, results, 3)
+
+		// Verify we got all statuses
+		statuses := make(map[model.Status]bool)
+		for _, result := range results {
+			statuses[result.Meta.Official.Status] = true
+		}
+
+		assert.True(t, statuses[model.StatusActive], "Should include active servers")
+		assert.True(t, statuses[model.StatusDeprecated], "Should include deprecated servers")
+		assert.True(t, statuses[model.StatusYanked], "Should include yanked servers")
+	})
+
+	t.Run("combined filters with include yanked", func(t *testing.T) {
+		// Test that IncludeYanked works correctly with other filters
+		filter := &database.ServerFilter{
+			SubstringName: stringPtr("yanked-filter"),
+			Version:       stringPtr("1.0.0"),
+			IsLatest:      boolPtr(true),
+			IncludeYanked: boolPtr(true),
+		}
+
+		results, _, err := db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+
+		// Should get all 3 servers (all match version and isLatest criteria)
+		assert.Len(t, results, 3)
+	})
+
+	t.Run("multiple versions with yanked filtering", func(t *testing.T) {
+		serverName := "com.example/multi-version-yanked-test"
+
+		// Create server with multiple versions, one yanked
+		versionsData := []struct {
+			version string
+			status  model.Status
+		}{
+			{"1.0.0", model.StatusYanked},  // Old version, yanked
+			{"1.1.0", model.StatusActive},  // Current stable
+			{"2.0.0", model.StatusActive},  // Latest
+		}
+
+		for i, v := range versionsData {
+			serverJSON := &apiv0.ServerJSON{
+				Name:        serverName,
+				Description: "Multi-version server",
+				Version:     v.version,
+			}
+			officialMeta := &apiv0.RegistryExtensions{
+				Status:          v.status,
+				StatusChangedAt: timeNow,
+				PublishedAt:     timeNow,
+				UpdatedAt:       timeNow,
+				IsLatest:        i == len(versionsData)-1,
+			}
+
+			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+			require.NoError(t, err)
+		}
+
+		// Without IncludeYanked - should get only active versions
+		filter := &database.ServerFilter{
+			Name:          stringPtr(serverName),
+			IncludeYanked: boolPtr(false),
+		}
+		results, _, err := db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+		assert.Len(t, results, 2, "Should only get non-yanked versions")
+
+		// With IncludeYanked - should get all versions
+		filter.IncludeYanked = boolPtr(true)
+		results, _, err = db.ListServers(ctx, nil, filter, "", 10)
+		require.NoError(t, err)
+		assert.Len(t, results, 3, "Should get all versions including yanked")
+	})
+}
+
 // Helper functions for creating pointers to basic types
 func stringPtr(s string) *string {
 	return &s

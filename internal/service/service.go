@@ -30,4 +30,8 @@ type RegistryService interface {
 	CreateServer(ctx context.Context, req *apiv0.ServerJSON) (*apiv0.ServerResponse, error)
 	// UpdateServer updates an existing server and optionally its status
 	UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error)
+	// UpdateServerStatus updates only the status metadata of a server version
+	UpdateServerStatus(ctx context.Context, serverName, version string, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error)
+	// UpdateAllVersionsStatus updates the status metadata of all versions of a server in a single transaction
+	UpdateAllVersionsStatus(ctx context.Context, serverName string, statusChange *StatusChangeRequest) ([]*apiv0.ServerResponse, error)
 }

@@ -245,3 +245,47 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 
 	return updatedServerResponse, nil
 }
+
+// UpdateServerStatus updates only the status metadata of a server version
+func (s *registryServiceImpl) UpdateServerStatus(ctx context.Context, serverName, version string, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error) {
+	// Wrap the entire operation in a transaction
+	return database.InTransactionT(ctx, s.db, func(ctx context.Context, tx pgx.Tx) (*apiv0.ServerResponse, error) {
+		return s.updateServerStatusInTransaction(ctx, tx, serverName, version, statusChange)
+	})
+}
+
+// updateServerStatusInTransaction contains the actual UpdateServerStatus logic within a transaction
+func (s *registryServiceImpl) updateServerStatusInTransaction(ctx context.Context, tx pgx.Tx, serverName, version string, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error) {
+	// Get current server to verify it exists
+	_, err := s.db.GetServerByNameAndVersion(ctx, tx, serverName, version)
+	if err != nil {
+		return nil, err
+	}
+
+	// Acquire advisory lock to prevent concurrent edits of servers with same name
+	if err := s.db.AcquirePublishLock(ctx, tx, serverName); err != nil {
+		return nil, err
+	}
+
+	// Update only the status metadata
+	return s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
+}
+
+// UpdateAllVersionsStatus updates the status metadata of all versions of a server in a single transaction
+func (s *registryServiceImpl) UpdateAllVersionsStatus(ctx context.Context, serverName string, statusChange *StatusChangeRequest) ([]*apiv0.ServerResponse, error) {
+	// Wrap the entire operation in a transaction
+	return database.InTransactionT(ctx, s.db, func(ctx context.Context, tx pgx.Tx) ([]*apiv0.ServerResponse, error) {
+		return s.updateAllVersionsStatusInTransaction(ctx, tx, serverName, statusChange)
+	})
+}
+
+// updateAllVersionsStatusInTransaction contains the actual UpdateAllVersionsStatus logic within a transaction
+func (s *registryServiceImpl) updateAllVersionsStatusInTransaction(ctx context.Context, tx pgx.Tx, serverName string, statusChange *StatusChangeRequest) ([]*apiv0.ServerResponse, error) {
+	// Acquire advisory lock to prevent concurrent edits of servers with same name
+	if err := s.db.AcquirePublishLock(ctx, tx, serverName); err != nil {
+		return nil, err
+	}
+
+	// Update all versions' status in a single database call
+	return s.db.SetAllVersionsStatus(ctx, tx, serverName, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
+}

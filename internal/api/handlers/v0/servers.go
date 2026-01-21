@@ -18,11 +18,12 @@ const errRecordNotFound = "record not found"
 
 // ListServersInput represents the input for listing servers
 type ListServersInput struct {
-	Cursor       string `query:"cursor" doc:"Pagination cursor" required:"false" example:"server-cursor-123"`
-	Limit        int    `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
-	UpdatedSince string `query:"updated_since" doc:"Filter servers updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
-	Search       string `query:"search" doc:"Search servers by name (substring match)" required:"false" example:"filesystem"`
-	Version      string `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
+	Cursor        string `query:"cursor" doc:"Pagination cursor" required:"false" example:"server-cursor-123"`
+	Limit         int    `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
+	UpdatedSince  string `query:"updated_since" doc:"Filter servers updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
+	Search        string `query:"search" doc:"Search servers by name (substring match)" required:"false" example:"filesystem"`
+	Version       string `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
+	IncludeYanked bool   `query:"include_yanked" doc:"Include yanked servers in results (default: false, but always true when updated_since is provided)" required:"false" default:"false"`
 }
 
 // ServerDetailInput represents the input for getting server details
@@ -80,6 +81,15 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 				// Future: exact version matching
 				filter.Version = &input.Version
 			}
+		}
+
+		// Handle include_yanked parameter
+		// When updated_since is provided, always include yanked for incremental sync
+		if filter.UpdatedSince != nil {
+			includeYanked := true
+			filter.IncludeYanked = &includeYanked
+		} else {
+			filter.IncludeYanked = &input.IncludeYanked
 		}
 
 		// Get paginated results with filtering
