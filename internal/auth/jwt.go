@@ -18,9 +18,7 @@ type PermissionAction string
 
 const (
 	PermissionActionPublish PermissionAction = "publish"
-	// PermissionActionEdit allows editing server configuration and status.
-	// Can be scoped to a namespace (e.g., "io.github.username/*") for server owners,
-	// or global ("*") for admins.
+	// PermissionActionEdit allows editing server configuration.
 	PermissionActionEdit PermissionAction = "edit"
 )
 

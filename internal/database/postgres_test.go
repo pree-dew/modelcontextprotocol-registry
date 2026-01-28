@@ -1563,7 +1563,7 @@ func TestPostgreSQL_IncludeDeletedFilter(t *testing.T) {
 
 	t.Run("excludes deleted when IncludeDeleted is false", func(t *testing.T) {
 		filter := &database.ServerFilter{
-			SubstringName: stringPtr("deleted-filter"),
+			SubstringName:  stringPtr("deleted-filter"),
 			IncludeDeleted: boolPtr(false),
 		}
 
@@ -1581,7 +1581,7 @@ func TestPostgreSQL_IncludeDeletedFilter(t *testing.T) {
 
 	t.Run("includes deleted when IncludeDeleted is true", func(t *testing.T) {
 		filter := &database.ServerFilter{
-			SubstringName: stringPtr("deleted-filter"),
+			SubstringName:  stringPtr("deleted-filter"),
 			IncludeDeleted: boolPtr(true),
 		}
 
@@ -1605,9 +1605,9 @@ func TestPostgreSQL_IncludeDeletedFilter(t *testing.T) {
 	t.Run("combined filters with include deleted", func(t *testing.T) {
 		// Test that IncludeDeleted works correctly with other filters
 		filter := &database.ServerFilter{
-			SubstringName: stringPtr("deleted-filter"),
-			Version:       stringPtr("1.0.0"),
-			IsLatest:      boolPtr(true),
+			SubstringName:  stringPtr("deleted-filter"),
+			Version:        stringPtr("1.0.0"),
+			IsLatest:       boolPtr(true),
 			IncludeDeleted: boolPtr(true),
 		}
 
@@ -1627,8 +1627,8 @@ func TestPostgreSQL_IncludeDeletedFilter(t *testing.T) {
 			status  model.Status
 		}{
 			{"1.0.0", model.StatusDeleted}, // Old version, deleted
-			{"1.1.0", model.StatusActive}, // Current stable
-			{"2.0.0", model.StatusActive}, // Latest
+			{"1.1.0", model.StatusActive},  // Current stable
+			{"2.0.0", model.StatusActive},  // Latest
 		}
 
 		for i, v := range versionsData {
@@ -1651,7 +1651,7 @@ func TestPostgreSQL_IncludeDeletedFilter(t *testing.T) {
 
 		// Without IncludeDeleted - should get only active versions
 		filter := &database.ServerFilter{
-			Name:          stringPtr(serverName),
+			Name:           stringPtr(serverName),
 			IncludeDeleted: boolPtr(false),
 		}
 		results, _, err := db.ListServers(ctx, nil, filter, "", 10)

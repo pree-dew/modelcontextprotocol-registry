@@ -437,42 +437,42 @@ func TestListServersDeletedFiltering(t *testing.T) {
 		queryParams    string
 		expectedStatus int
 		expectedCount  int
-		checkDeleted    bool // whether deleted server should be in results
+		checkDeleted   bool // whether deleted server should be in results
 	}{
 		{
 			name:           "default excludes deleted servers",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			expectedCount:  2,
-			checkDeleted:    false,
+			checkDeleted:   false,
 		},
 		{
 			name:           "include_deleted=false excludes deleted servers",
 			queryParams:    "?include_deleted=false",
 			expectedStatus: http.StatusOK,
 			expectedCount:  2,
-			checkDeleted:    false,
+			checkDeleted:   false,
 		},
 		{
 			name:           "include_deleted=true includes deleted servers",
 			queryParams:    "?include_deleted=true",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkDeleted:    true,
+			checkDeleted:   true,
 		},
 		{
 			name:           "updated_since always includes deleted servers",
 			queryParams:    "?updated_since=1990-01-01T00:00:00Z",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkDeleted:    true,
+			checkDeleted:   true,
 		},
 		{
 			name:           "updated_since overrides include_deleted=false",
 			queryParams:    "?updated_since=1990-01-01T00:00:00Z&include_deleted=false",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkDeleted:    true,
+			checkDeleted:   true,
 		},
 	}
 
