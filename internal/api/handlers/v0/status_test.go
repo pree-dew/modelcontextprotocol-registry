@@ -63,15 +63,15 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				ID:     "testuser/deprecated-server",
 			},
 		},
-		"yanked": {
+		"deleted": {
 			Schema:      model.CurrentSchemaURL,
-			Name:        "io.github.testuser/yanked-server",
-			Description: "Server in yanked status",
+			Name:        "io.github.testuser/deleted-server",
+			Description: "Server in deleted status",
 			Version:     "1.0.0",
 			Repository: &model.Repository{
-				URL:    "https://github.com/testuser/yanked-server",
+				URL:    "https://github.com/testuser/deleted-server",
 				Source: "github",
-				ID:     "testuser/yanked-server",
+				ID:     "testuser/deleted-server",
 			},
 		},
 		"other": {
@@ -83,28 +83,6 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				URL:    "https://github.com/otheruser/other-server",
 				Source: "github",
 				ID:     "otheruser/other-server",
-			},
-		},
-		"newserver": {
-			Schema:      model.CurrentSchemaURL,
-			Name:        "io.github.testuser/new-server",
-			Description: "New server for renaming tests",
-			Version:     "1.0.0",
-			Repository: &model.Repository{
-				URL:    "https://github.com/testuser/new-server",
-				Source: "github",
-				ID:     "testuser/new-server",
-			},
-		},
-		"newname-active-test": {
-			Schema:      model.CurrentSchemaURL,
-			Name:        "io.github.testuser/newname-active-test",
-			Description: "Server for testing newName with active status",
-			Version:     "1.0.0",
-			Repository: &model.Repository{
-				URL:    "https://github.com/testuser/newname-active-test",
-				Source: "github",
-				ID:     "testuser/newname-active-test",
 			},
 		},
 		"multi-version": {
@@ -132,15 +110,9 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Set yanked server to yanked status
-	_, err = registryService.UpdateServerStatus(context.Background(), testServers["yanked"].Name, testServers["yanked"].Version, &service.StatusChangeRequest{
-		NewStatus: model.StatusYanked,
-	})
-	require.NoError(t, err)
-
-	// Set newname-active-test server to deprecated for the newName rejection test
-	_, err = registryService.UpdateServerStatus(context.Background(), testServers["newname-active-test"].Name, testServers["newname-active-test"].Version, &service.StatusChangeRequest{
-		NewStatus: model.StatusDeprecated,
+	// Set deleted server to deleted status
+	_, err = registryService.UpdateServerStatus(context.Background(), testServers["deleted"].Name, testServers["deleted"].Version, &service.StatusChangeRequest{
+		NewStatus: model.StatusDeleted,
 	})
 	require.NoError(t, err)
 
@@ -178,7 +150,7 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -191,40 +163,37 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name:       "successful status change with message and alternative URL",
+			name:       "successful status change with message",
 			serverName: "io.github.testuser/active-server",
 			version:    "1.0.0",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
-				Status:         "yanked",
-				StatusMessage:  strPtr("Security vulnerability discovered"),
-				AlternativeURL: strPtr("https://example.com/patched-version"),
+				Status:        "deleted",
+				StatusMessage: strPtr("Security vulnerability discovered"),
 			},
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
 				t.Helper()
-				assert.Equal(t, model.StatusYanked, resp.Meta.Official.Status)
+				assert.Equal(t, model.StatusDeleted, resp.Meta.Official.Status)
 				assert.NotNil(t, resp.Meta.Official.StatusMessage)
 				assert.Equal(t, "Security vulnerability discovered", *resp.Meta.Official.StatusMessage)
-				assert.NotNil(t, resp.Meta.Official.AlternativeURL)
-				assert.Equal(t, "https://example.com/patched-version", *resp.Meta.Official.AlternativeURL)
 			},
 		},
 		{
-			name:       "successful unyank from yanked to active",
-			serverName: "io.github.testuser/yanked-server",
+			name:       "successful restore from deleted to active",
+			serverName: "io.github.testuser/deleted-server",
 			version:    "1.0.0",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -234,9 +203,8 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, model.StatusActive, resp.Meta.Official.Status)
-				// Status message and alternative URL should be cleared when transitioning to active
+				// Status message should be cleared when transitioning to active
 				assert.Nil(t, resp.Meta.Official.StatusMessage)
-				assert.Nil(t, resp.Meta.Official.AlternativeURL)
 			},
 		},
 		{
@@ -247,7 +215,7 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -291,8 +259,25 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 			expectedError:  "Invalid or expired Registry JWT token",
 		},
 		{
-			name:       "permission denied - no edit permissions",
+			name:       "permission denied - no publish permissions",
 			serverName: "io.github.testuser/active-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "deprecated",
+			},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "You do not have publish permissions",
+		},
+		{
+			name:       "permission denied - wrong namespace",
+			serverName: "io.github.otheruser/other-server",
 			version:    "1.0.0",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
@@ -305,24 +290,7 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				Status: "deprecated",
 			},
 			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have edit permissions",
-		},
-		{
-			name:       "permission denied - wrong namespace",
-			serverName: "io.github.otheruser/other-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status: "deprecated",
-			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have edit permissions",
+			expectedError:  "You do not have publish permissions",
 		},
 		{
 			name:       "server not found",
@@ -332,135 +300,14 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
 				Status: "deprecated",
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedError:  "Server not found",
-		},
-		{
-			name:       "newName with valid deprecated status and permissions",
-			serverName: "io.github.testuser/active-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-server"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:        "deprecated",
-				StatusMessage: strPtr("Moved to new server"),
-				NewName:       strPtr("io.github.testuser/new-server"),
-			},
-			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
-				t.Helper()
-				assert.Equal(t, model.StatusDeprecated, resp.Meta.Official.Status)
-				assert.NotNil(t, resp.Meta.Official.NewName)
-				assert.Equal(t, "io.github.testuser/new-server", *resp.Meta.Official.NewName)
-			},
-		},
-		{
-			name:       "newName rejected when transitioning to active",
-			serverName: "io.github.testuser/newname-active-test",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "active",
-				NewName: strPtr("io.github.testuser/new-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "new_name can only be used with deprecated or yanked status",
-		},
-		{
-			name:       "newName rejected when same as current server name",
-			serverName: "io.github.testuser/active-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.testuser/active-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "new_name cannot be the same as the current server name",
-		},
-		{
-			name:       "newName with non-existent server",
-			serverName: "io.github.testuser/deprecated-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "yanked",
-				NewName: strPtr("io.github.testuser/non-existent-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "New server 'io.github.testuser/non-existent-server' does not exist in the registry",
-		},
-		{
-			name:       "newName with server belonging to different user without permissions",
-			serverName: "io.github.testuser/deprecated-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "yanked",
-				NewName: strPtr("io.github.otheruser/other-server"),
-			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have permissions for the new server 'io.github.otheruser/other-server'",
-		},
-		{
-			name:       "same status transition allowed when updating newName",
-			serverName: "io.github.testuser/deprecated-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-server"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.testuser/new-server"),
-			},
-			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
-				t.Helper()
-				assert.Equal(t, model.StatusDeprecated, resp.Meta.Official.Status)
-				assert.NotNil(t, resp.Meta.Official.NewName)
-				assert.Equal(t, "io.github.testuser/new-server", *resp.Meta.Official.NewName)
-			},
+			expectedError:  "Server version not found",
 		},
 		{
 			name:       "same status transition allowed when updating statusMessage",
@@ -470,7 +317,7 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -484,25 +331,6 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				assert.NotNil(t, resp.Meta.Official.StatusMessage)
 				assert.Equal(t, "Updated deprecation message", *resp.Meta.Official.StatusMessage)
 			},
-		},
-		{
-			name:       "newName rejected for single version when server has multiple versions",
-			serverName: "io.github.testuser/multi-version-server",
-			version:    "1.0.0",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-server"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.testuser/new-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "new_name cannot be used with single version endpoint when server has multiple versions",
 		},
 	}
 
@@ -608,7 +436,7 @@ func TestUpdateServerStatusEndpointSameStatusTransition(t *testing.T) {
 	tokenResponse, err := jwtManager.GenerateTokenResponse(context.Background(), auth.JWTClaims{
 		AuthMethod: auth.MethodNone,
 		Permissions: []auth.Permission{
-			{Action: auth.PermissionActionEdit, ResourcePattern: "*"},
+			{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
 		},
 	})
 	require.NoError(t, err)
@@ -669,7 +497,7 @@ func TestUpdateServerStatusEndpointURLEncoding(t *testing.T) {
 	tokenResponse, err := jwtManager.GenerateTokenResponse(context.Background(), auth.JWTClaims{
 		AuthMethod: auth.MethodNone,
 		Permissions: []auth.Permission{
-			{Action: auth.PermissionActionEdit, ResourcePattern: "*"},
+			{Action: auth.PermissionActionPublish, ResourcePattern: "*"},
 		},
 	})
 	require.NoError(t, err)
@@ -724,21 +552,6 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 	_, err = registryService.CreateServer(context.Background(), multiVersionServer)
 	require.NoError(t, err)
 
-	// Create a new server to use for newName tests
-	newServer := &apiv0.ServerJSON{
-		Schema:      model.CurrentSchemaURL,
-		Name:        "io.github.testuser/new-target-server",
-		Description: "New target server for renaming",
-		Version:     "1.0.0",
-		Repository: &model.Repository{
-			URL:    "https://github.com/testuser/new-target-server",
-			Source: "github",
-			ID:     "testuser/new-target-server",
-		},
-	}
-	_, err = registryService.CreateServer(context.Background(), newServer)
-	require.NoError(t, err)
-
 	// Create other user's server
 	otherServer := &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
@@ -771,7 +584,7 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -791,29 +604,27 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name:       "successful yank of all versions with newName",
+			name:       "successful delete of all versions",
 			serverName: "io.github.testuser/multi-version-server",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/new-target-server"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
-				Status:        "yanked",
-				StatusMessage: strPtr("Moved to new server"),
-				NewName:       strPtr("io.github.testuser/new-target-server"),
+				Status:        "deleted",
+				StatusMessage: strPtr("Security issue discovered"),
 			},
 			expectedStatus: http.StatusOK,
 			checkResult: func(t *testing.T, resp *v0.UpdateAllVersionsStatusResponse) {
 				t.Helper()
 				assert.Equal(t, 3, resp.UpdatedCount)
 				for _, server := range resp.Servers {
-					assert.Equal(t, model.StatusYanked, server.Meta.Official.Status)
-					assert.NotNil(t, server.Meta.Official.NewName)
-					assert.Equal(t, "io.github.testuser/new-target-server", *server.Meta.Official.NewName)
+					assert.Equal(t, model.StatusDeleted, server.Meta.Official.Status)
+					assert.NotNil(t, server.Meta.Official.StatusMessage)
+					assert.Equal(t, "Security issue discovered", *server.Meta.Official.StatusMessage)
 				}
 			},
 		},
@@ -824,7 +635,7 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
 				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
 				},
 			},
 			requestBody: v0.UpdateServerStatusBody{
@@ -836,9 +647,8 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 				assert.Equal(t, 3, resp.UpdatedCount)
 				for _, server := range resp.Servers {
 					assert.Equal(t, model.StatusActive, server.Meta.Official.Status)
-					// Status message and newName should be cleared when transitioning to active
+					// Status message should be cleared when transitioning to active
 					assert.Nil(t, server.Meta.Official.StatusMessage)
-					assert.Nil(t, server.Meta.Official.NewName)
 				}
 			},
 		},
@@ -861,8 +671,24 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 			expectedError:  "Invalid Authorization header format",
 		},
 		{
-			name:       "permission denied - no edit permissions",
+			name:       "permission denied - no publish permissions",
 			serverName: "io.github.testuser/multi-version-server",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "deprecated",
+			},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "You do not have publish permissions",
+		},
+		{
+			name:       "server not found",
+			serverName: "io.github.testuser/non-existent",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
 				AuthMethodSubject: "testuser",
@@ -873,92 +699,8 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 			requestBody: v0.UpdateServerStatusBody{
 				Status: "deprecated",
 			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have edit permissions",
-		},
-		{
-			name:       "server not found",
-			serverName: "io.github.testuser/non-existent",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status: "deprecated",
-			},
 			expectedStatus: http.StatusNotFound,
 			expectedError:  "Server not found",
-		},
-		{
-			name:       "newName rejected when transitioning to active",
-			serverName: "io.github.testuser/multi-version-server",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "active",
-				NewName: strPtr("io.github.testuser/new-target-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "new_name can only be used with deprecated or yanked status",
-		},
-		{
-			name:       "newName rejected when same as current server name",
-			serverName: "io.github.testuser/multi-version-server",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.testuser/multi-version-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "new_name cannot be the same as the current server name",
-		},
-		{
-			name:       "newName with non-existent server",
-			serverName: "io.github.testuser/multi-version-server",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.testuser/non-existent-server"),
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "New server 'io.github.testuser/non-existent-server' does not exist in the registry",
-		},
-		{
-			name:       "newName with server belonging to different user without permissions",
-			serverName: "io.github.testuser/multi-version-server",
-			authClaims: &auth.JWTClaims{
-				AuthMethod:        auth.MethodGitHubAT,
-				AuthMethodSubject: "testuser",
-				Permissions: []auth.Permission{
-					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
-				},
-			},
-			requestBody: v0.UpdateServerStatusBody{
-				Status:  "deprecated",
-				NewName: strPtr("io.github.otheruser/other-server"),
-			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have permissions for the new server 'io.github.otheruser/other-server'",
 		},
 	}
 

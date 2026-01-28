@@ -10,10 +10,8 @@ import (
 
 // StatusChangeRequest represents a request to change a server's status
 type StatusChangeRequest struct {
-	NewStatus      model.Status `json:"newStatus"`
-	StatusMessage  *string      `json:"statusMessage,omitempty"`
-	AlternativeURL *string      `json:"alternativeUrl,omitempty"`
-	NewName        *string      `json:"newName,omitempty"`
+	NewStatus     model.Status `json:"newStatus"`
+	StatusMessage *string      `json:"statusMessage,omitempty"`
 }
 
 // RegistryService defines the interface for registry operations

@@ -17,10 +17,8 @@ import (
 
 // StatusUpdateRequest represents the request body for status update endpoints
 type StatusUpdateRequest struct {
-	Status         string  `json:"status"`
-	StatusMessage  *string `json:"statusMessage,omitempty"`
-	AlternativeURL *string `json:"alternativeUrl,omitempty"`
-	NewName        *string `json:"newName,omitempty"`
+	Status        string  `json:"status"`
+	StatusMessage *string `json:"statusMessage,omitempty"`
 }
 
 // AllVersionsStatusResponse represents the response from the all-versions status endpoint
@@ -31,10 +29,8 @@ type AllVersionsStatusResponse struct {
 func StatusCommand(args []string) error {
 	// Parse command flags
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
-	status := fs.String("status", "", "New status: active, deprecated, or yanked (required)")
+	status := fs.String("status", "", "New status: active, deprecated, or deleted (required)")
 	message := fs.String("message", "", "Optional status message explaining the change")
-	alternativeURL := fs.String("alternative-url", "", "Optional URL to alternative/replacement server")
-	newName := fs.String("new-name", "", "Optional new server name when server has been renamed")
 	allVersions := fs.Bool("all-versions", false, "Apply status change to all versions of the server")
 
 	if err := fs.Parse(args); err != nil {
@@ -43,19 +39,19 @@ func StatusCommand(args []string) error {
 
 	// Validate required arguments
 	if *status == "" {
-		return errors.New("--status flag is required (active, deprecated, or yanked)")
+		return errors.New("--status flag is required (active, deprecated, or deleted)")
 	}
 
 	// Validate status value
-	validStatuses := map[string]bool{"active": true, "deprecated": true, "yanked": true}
+	validStatuses := map[string]bool{"active": true, "deprecated": true, "deleted": true}
 	if !validStatuses[*status] {
-		return fmt.Errorf("invalid status '%s'. Must be one of: active, deprecated, yanked", *status)
+		return fmt.Errorf("invalid status '%s'. Must be one of: active, deprecated, deleted", *status)
 	}
 
 	// Get server name from positional args
 	remainingArgs := fs.Args()
 	if len(remainingArgs) < 1 {
-		return errors.New("server name is required\n\nUsage: mcp-publisher status <server-name> [version] --status <active|deprecated|yanked> [flags]")
+		return errors.New("server name is required\n\nUsage: mcp-publisher status --status <active|deprecated|deleted> [flags] <server-name> [version]")
 	}
 
 	serverName := remainingArgs[0]
@@ -64,21 +60,9 @@ func StatusCommand(args []string) error {
 	// Get version if provided (required unless --all-versions is set)
 	if !*allVersions {
 		if len(remainingArgs) < 2 {
-			return errors.New("version is required unless --all-versions flag is set\n\nUsage: mcp-publisher status <server-name> <version> --status <active|deprecated|yanked> [flags]")
+			return errors.New("version is required unless --all-versions flag is set\n\nUsage: mcp-publisher status --status <active|deprecated|deleted> [flags] <server-name> <version>")
 		}
 		version = remainingArgs[1]
-	}
-
-	// Validate new-name parameter constraints
-	if *newName != "" {
-		// Validation: new-name requires deprecated or yanked status
-		if *status != "deprecated" && *status != "yanked" {
-			return errors.New("--new-name can only be used with --status deprecated or --status yanked")
-		}
-		// Validation: new-name requires --all-versions flag
-		if !*allVersions {
-			return errors.New("--new-name requires --all-versions flag")
-		}
 	}
 
 	// Load saved token
@@ -109,15 +93,15 @@ func StatusCommand(args []string) error {
 
 	// Update status
 	if *allVersions {
-		return updateAllVersionsStatus(registryURL, serverName, *status, *message, *alternativeURL, *newName, token)
+		return updateAllVersionsStatus(registryURL, serverName, *status, *message, token)
 	}
-	return updateVersionStatus(registryURL, serverName, version, *status, *message, *alternativeURL, *newName, token)
+	return updateVersionStatus(registryURL, serverName, version, *status, *message, token)
 }
 
-func updateVersionStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token string) error {
+func updateVersionStatus(registryURL, serverName, version, status, statusMessage, token string) error {
 	_, _ = fmt.Fprintf(os.Stdout, "Updating %s version %s to status: %s\n", serverName, version, status)
 
-	if err := updateServerStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token); err != nil {
+	if err := updateServerStatus(registryURL, serverName, version, status, statusMessage, token); err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
@@ -125,7 +109,7 @@ func updateVersionStatus(registryURL, serverName, version, status, statusMessage
 	return nil
 }
 
-func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, alternativeURL, newName, token string) error {
+func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, token string) error {
 	_, _ = fmt.Fprintf(os.Stdout, "Updating all versions of %s to status: %s\n", serverName, status)
 
 	if !strings.HasSuffix(registryURL, "/") {
@@ -138,12 +122,6 @@ func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, alt
 	}
 	if statusMessage != "" {
 		requestBody.StatusMessage = &statusMessage
-	}
-	if alternativeURL != "" {
-		requestBody.AlternativeURL = &alternativeURL
-	}
-	if newName != "" {
-		requestBody.NewName = &newName
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -190,7 +168,7 @@ func updateAllVersionsStatus(registryURL, serverName, status, statusMessage, alt
 	return nil
 }
 
-func updateServerStatus(registryURL, serverName, version, status, statusMessage, alternativeURL, newName, token string) error {
+func updateServerStatus(registryURL, serverName, version, status, statusMessage, token string) error {
 	if !strings.HasSuffix(registryURL, "/") {
 		registryURL += "/"
 	}
@@ -201,12 +179,6 @@ func updateServerStatus(registryURL, serverName, version, status, statusMessage,
 	}
 	if statusMessage != "" {
 		requestBody.StatusMessage = &statusMessage
-	}
-	if alternativeURL != "" {
-		requestBody.AlternativeURL = &alternativeURL
-	}
-	if newName != "" {
-		requestBody.NewName = &newName
 	}
 
 	jsonData, err := json.Marshal(requestBody)

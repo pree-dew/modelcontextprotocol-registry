@@ -549,10 +549,10 @@ func TestUpdateServer(t *testing.T) {
 	}
 }
 
-func TestUpdateServer_SkipValidationForYankedServers(t *testing.T) {
+func TestUpdateServer_SkipValidationForDeletedServers(t *testing.T) {
 	ctx := context.Background()
 	testDB := database.NewTestDB(t)
-	// Enable registry validation to test that it gets skipped for yanked servers
+	// Enable registry validation to test that it gets skipped for deleted servers
 	service := NewRegistryService(testDB, &config.Config{EnableRegistryValidation: true})
 
 	serverName := "com.example/validation-skip-test"
@@ -581,23 +581,23 @@ func TestUpdateServer_SkipValidationForYankedServers(t *testing.T) {
 	require.NoError(t, err, "failed to create server with validation disabled")
 	service.(*registryServiceImpl).cfg.EnableRegistryValidation = originalConfig
 
-	// First, set server to yanked status
-	yankedStatusChange := &StatusChangeRequest{
-		NewStatus: model.StatusYanked,
+	// First, set server to deleted status
+	deletedStatusChange := &StatusChangeRequest{
+		NewStatus: model.StatusDeleted,
 	}
-	_, err = service.UpdateServer(ctx, serverName, version, invalidServer, yankedStatusChange)
-	require.NoError(t, err, "should be able to set server to yanked (validation should be skipped)")
+	_, err = service.UpdateServer(ctx, serverName, version, invalidServer, deletedStatusChange)
+	require.NoError(t, err, "should be able to set server to deleted (validation should be skipped)")
 
-	// Verify server is now yanked
+	// Verify server is now deleted
 	updatedServer, err := service.GetServerByNameAndVersion(ctx, serverName, version)
 	require.NoError(t, err)
-	assert.Equal(t, model.StatusYanked, updatedServer.Meta.Official.Status)
+	assert.Equal(t, model.StatusDeleted, updatedServer.Meta.Official.Status)
 
-	// Now try to update a yanked server - validation should be skipped
+	// Now try to update a deleted server - validation should be skipped
 	updatedInvalidServer := &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
 		Name:        serverName,
-		Description: "Updated description for yanked server",
+		Description: "Updated description for deleted server",
 		Version:     version,
 		Packages: []model.Package{
 			{
@@ -609,18 +609,18 @@ func TestUpdateServer_SkipValidationForYankedServers(t *testing.T) {
 		},
 	}
 
-	// This should succeed despite invalid packages because server is yanked
+	// This should succeed despite invalid packages because server is deleted
 	result, err := service.UpdateServer(ctx, serverName, version, updatedInvalidServer, nil)
-	assert.NoError(t, err, "updating yanked server should skip registry validation")
+	assert.NoError(t, err, "updating deleted server should skip registry validation")
 	assert.NotNil(t, result)
-	assert.Equal(t, "Updated description for yanked server", result.Server.Description)
-	assert.Equal(t, model.StatusYanked, result.Meta.Official.Status)
+	assert.Equal(t, "Updated description for deleted server", result.Server.Description)
+	assert.Equal(t, model.StatusDeleted, result.Meta.Official.Status)
 
-	// Test updating a server being set to yanked status
+	// Test updating a server being set to deleted status
 	activeServer := &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
-		Name:        "com.example/being-yanked-test",
-		Description: "Server being yanked",
+		Name:        "com.example/being-deleted-test",
+		Description: "Server being deleted",
 		Version:     "1.0.0",
 		Packages: []model.Package{
 			{
@@ -638,14 +638,14 @@ func TestUpdateServer_SkipValidationForYankedServers(t *testing.T) {
 	require.NoError(t, err)
 	service.(*registryServiceImpl).cfg.EnableRegistryValidation = originalConfig
 
-	// Update server and set to yanked in same operation - should skip validation
-	newYankedStatusChange := &StatusChangeRequest{
-		NewStatus: model.StatusYanked,
+	// Update server and set to deleted in same operation - should skip validation
+	newDeletedStatusChange := &StatusChangeRequest{
+		NewStatus: model.StatusDeleted,
 	}
-	result2, err := service.UpdateServer(ctx, "com.example/being-yanked-test", "1.0.0", activeServer, newYankedStatusChange)
-	assert.NoError(t, err, "updating server being set to yanked should skip registry validation")
+	result2, err := service.UpdateServer(ctx, "com.example/being-deleted-test", "1.0.0", activeServer, newDeletedStatusChange)
+	assert.NoError(t, err, "updating server being set to deleted should skip registry validation")
 	assert.NotNil(t, result2)
-	assert.Equal(t, model.StatusYanked, result2.Meta.Official.Status)
+	assert.Equal(t, model.StatusDeleted, result2.Meta.Official.Status)
 }
 
 func TestListServers(t *testing.T) {

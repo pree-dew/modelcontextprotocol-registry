@@ -197,20 +197,20 @@ func (s *registryServiceImpl) UpdateServer(ctx context.Context, serverName, vers
 
 // updateServerInTransaction contains the actual UpdateServer logic within a transaction
 func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx pgx.Tx, serverName, version string, req *apiv0.ServerJSON, statusChange *StatusChangeRequest) (*apiv0.ServerResponse, error) {
-	// Get current server to check if it's yanked or being yanked
+	// Get current server to check if it's deleted or being deleted
 	currentServer, err := s.db.GetServerByNameAndVersion(ctx, tx, serverName, version)
 	if err != nil {
 		return nil, err
 	}
 
 	// Skip registry validation if:
-	// 1. Server is currently yanked, OR
-	// 2. Server is being set to yanked status
-	currentlyYanked := currentServer.Meta.Official != nil && currentServer.Meta.Official.Status == model.StatusYanked
-	beingYanked := statusChange != nil && statusChange.NewStatus == model.StatusYanked
-	skipRegistryValidation := currentlyYanked || beingYanked
+	// 1. Server is currently deleted, OR
+	// 2. Server is being set to deleted status
+	currentlyDeleted := currentServer.Meta.Official != nil && currentServer.Meta.Official.Status == model.StatusDeleted
+	beingDeleted := statusChange != nil && statusChange.NewStatus == model.StatusDeleted
+	skipRegistryValidation := currentlyDeleted || beingDeleted
 
-	// Validate the request, potentially skipping registry validation for yanked servers
+	// Validate the request, potentially skipping registry validation for deleted servers
 	if err := validators.ValidateUpdateRequest(ctx, *req, s.cfg, skipRegistryValidation); err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (s *registryServiceImpl) updateServerInTransaction(ctx context.Context, tx 
 
 	// Handle status change if provided
 	if statusChange != nil {
-		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
+		updatedWithStatus, err := s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage)
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +268,7 @@ func (s *registryServiceImpl) updateServerStatusInTransaction(ctx context.Contex
 	}
 
 	// Update only the status metadata
-	return s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
+	return s.db.SetServerStatus(ctx, tx, serverName, version, statusChange.NewStatus, statusChange.StatusMessage)
 }
 
 // UpdateAllVersionsStatus updates the status metadata of all versions of a server in a single transaction
@@ -287,5 +287,5 @@ func (s *registryServiceImpl) updateAllVersionsStatusInTransaction(ctx context.C
 	}
 
 	// Update all versions' status in a single database call
-	return s.db.SetAllVersionsStatus(ctx, tx, serverName, statusChange.NewStatus, statusChange.StatusMessage, statusChange.AlternativeURL, statusChange.NewName)
+	return s.db.SetAllVersionsStatus(ctx, tx, serverName, statusChange.NewStatus, statusChange.StatusMessage)
 }

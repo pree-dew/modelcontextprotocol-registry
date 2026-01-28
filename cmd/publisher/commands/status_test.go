@@ -218,18 +218,6 @@ func TestStatusCommand_FlagCombinations(t *testing.T) {
 			args: []string{"--status", "deprecated", "--message", "Please upgrade to v2", "io.github.user/my-server", "1.0.0"},
 		},
 		{
-			name: "status with alternative-url",
-			args: []string{"--status", "deprecated", "--alternative-url", "https://github.com/user/new-server", "io.github.user/my-server", "1.0.0"},
-		},
-		{
-			name: "status with both message and alternative-url",
-			args: []string{"--status", "deprecated", "--message", "Deprecated", "--alternative-url", "https://example.com", "io.github.user/my-server", "1.0.0"},
-		},
-		{
-			name: "active status with message and url (CLI accepts, server validates)",
-			args: []string{"--status", "active", "--message", "Should be ignored", "--alternative-url", "https://example.com", "io.github.user/my-server", "1.0.0"},
-		},
-		{
 			name: "all-versions with message",
 			args: []string{"--status", "deprecated", "--all-versions", "--message", "All versions deprecated", "io.github.user/my-server"},
 		},

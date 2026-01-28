@@ -392,11 +392,11 @@ func TestGetAllVersionsEndpoint(t *testing.T) {
 	}
 }
 
-func TestListServersYankedFiltering(t *testing.T) {
+func TestListServersDeletedFiltering(t *testing.T) {
 	ctx := context.Background()
 	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
 
-	// Setup test data: 2 active servers and 1 yanked server
+	// Setup test data: 2 active servers and 1 deleted server
 	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
 		Name:        "com.example/active-server-1",
@@ -415,15 +415,15 @@ func TestListServersYankedFiltering(t *testing.T) {
 
 	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
-		Name:        "com.example/yanked-server",
-		Description: "Yanked server",
+		Name:        "com.example/deleted-server",
+		Description: "Deleted server",
 		Version:     "1.0.0",
 	})
 	require.NoError(t, err)
 
-	// Yank the third server
-	_, err = registryService.UpdateServerStatus(ctx, "com.example/yanked-server", "1.0.0", &service.StatusChangeRequest{
-		NewStatus: model.StatusYanked,
+	// Delete the third server
+	_, err = registryService.UpdateServerStatus(ctx, "com.example/deleted-server", "1.0.0", &service.StatusChangeRequest{
+		NewStatus: model.StatusDeleted,
 	})
 	require.NoError(t, err)
 
@@ -437,42 +437,42 @@ func TestListServersYankedFiltering(t *testing.T) {
 		queryParams    string
 		expectedStatus int
 		expectedCount  int
-		checkYanked    bool // whether yanked server should be in results
+		checkDeleted    bool // whether deleted server should be in results
 	}{
 		{
-			name:           "default excludes yanked servers",
+			name:           "default excludes deleted servers",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			expectedCount:  2,
-			checkYanked:    false,
+			checkDeleted:    false,
 		},
 		{
-			name:           "include_yanked=false excludes yanked servers",
-			queryParams:    "?include_yanked=false",
+			name:           "include_deleted=false excludes deleted servers",
+			queryParams:    "?include_deleted=false",
 			expectedStatus: http.StatusOK,
 			expectedCount:  2,
-			checkYanked:    false,
+			checkDeleted:    false,
 		},
 		{
-			name:           "include_yanked=true includes yanked servers",
-			queryParams:    "?include_yanked=true",
+			name:           "include_deleted=true includes deleted servers",
+			queryParams:    "?include_deleted=true",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkYanked:    true,
+			checkDeleted:    true,
 		},
 		{
-			name:           "updated_since always includes yanked servers",
+			name:           "updated_since always includes deleted servers",
 			queryParams:    "?updated_since=1990-01-01T00:00:00Z",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkYanked:    true,
+			checkDeleted:    true,
 		},
 		{
-			name:           "updated_since overrides include_yanked=false",
-			queryParams:    "?updated_since=1990-01-01T00:00:00Z&include_yanked=false",
+			name:           "updated_since overrides include_deleted=false",
+			queryParams:    "?updated_since=1990-01-01T00:00:00Z&include_deleted=false",
 			expectedStatus: http.StatusOK,
 			expectedCount:  3,
-			checkYanked:    true,
+			checkDeleted:    true,
 		},
 	}
 
@@ -490,15 +490,15 @@ func TestListServersYankedFiltering(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Len(t, resp.Servers, tt.expectedCount)
 
-			// Check if yanked server is in results
-			hasYanked := false
+			// Check if deleted server is in results
+			hasDeleted := false
 			for _, server := range resp.Servers {
-				if server.Server.Name == "com.example/yanked-server" {
-					hasYanked = true
-					assert.Equal(t, model.StatusYanked, server.Meta.Official.Status)
+				if server.Server.Name == "com.example/deleted-server" {
+					hasDeleted = true
+					assert.Equal(t, model.StatusDeleted, server.Meta.Official.Status)
 				}
 			}
-			assert.Equal(t, tt.checkYanked, hasYanked, "Yanked server presence mismatch")
+			assert.Equal(t, tt.checkDeleted, hasDeleted, "Deleted server presence mismatch")
 		})
 	}
 }
@@ -625,7 +625,7 @@ func TestServersEndpointEdgeCases(t *testing.T) {
 			assert.NotNil(t, server.Meta)
 			assert.NotNil(t, server.Meta.Official)
 			assert.NotZero(t, server.Meta.Official.PublishedAt)
-			assert.Contains(t, []model.Status{model.StatusActive, model.StatusDeprecated, model.StatusYanked}, server.Meta.Official.Status)
+			assert.Contains(t, []model.Status{model.StatusActive, model.StatusDeprecated, model.StatusDeleted}, server.Meta.Official.Status)
 		}
 	})
 }

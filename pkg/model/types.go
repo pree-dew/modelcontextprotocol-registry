@@ -5,7 +5,7 @@ type Status string
 const (
 	StatusActive     Status = "active"
 	StatusDeprecated Status = "deprecated"
-	StatusYanked     Status = "yanked"
+	StatusDeleted    Status = "deleted"
 )
 
 // Transport represents transport configuration for both Package and Remote contexts.
