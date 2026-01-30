@@ -26,7 +26,7 @@ type UpdateServerStatusBody struct {
 
 // UpdateServerStatusInput represents the input for updating server status
 type UpdateServerStatusInput struct {
-	Authorization string                 `header:"Authorization" doc:"Registry JWT token with publish permissions" required:"true"`
+	Authorization string                 `header:"Authorization" doc:"Registry JWT token with publish or edit permissions" required:"true"`
 	ServerName    string                 `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
 	Version       string                 `path:"version" doc:"URL-encoded version to update" example:"1.0.0"`
 	Body          UpdateServerStatusBody `body:""`
@@ -64,7 +64,7 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 		Method:      http.MethodPatch,
 		Path:        pathPrefix + "/servers/{serverName}/versions/{version}/status",
 		Summary:     "Update MCP server status",
-		Description: "Update the status metadata of a specific version of an MCP server. Requires publish permission for the server. This endpoint allows changing status and status message without requiring the full server configuration.",
+		Description: "Update the status metadata of a specific version of an MCP server. Requires publish or edit permission for the server. This endpoint allows changing status and status message without requiring the full server configuration.",
 		Tags:        []string{"servers"},
 		Security: []map[string][]string{
 			{"bearer": {}},
@@ -107,9 +107,11 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 			return nil, huma.Error500InternalServerError("Failed to get server", err)
 		}
 
-		// Verify publish permissions for this server
-		if !jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionPublish, claims.Permissions) {
-			return nil, huma.Error403Forbidden("You do not have publish permissions for this server")
+		// Verify publish or edit permissions for this server
+		hasPublish := jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionPublish, claims.Permissions)
+		hasEdit := jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionEdit, claims.Permissions)
+		if !hasPublish && !hasEdit {
+			return nil, huma.Error403Forbidden("You do not have publish or edit permissions for this server")
 		}
 
 		// Validate status transition is allowed
@@ -160,7 +162,7 @@ func hasMetadataFieldsToUpdate(body UpdateServerStatusBody) bool {
 
 // UpdateAllVersionsStatusInput represents the input for updating all versions' status
 type UpdateAllVersionsStatusInput struct {
-	Authorization string                 `header:"Authorization" doc:"Registry JWT token with publish permissions" required:"true"`
+	Authorization string                 `header:"Authorization" doc:"Registry JWT token with publish or edit permissions" required:"true"`
 	ServerName    string                 `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
 	Body          UpdateServerStatusBody `body:""`
 }
@@ -181,7 +183,7 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 		Method:      http.MethodPatch,
 		Path:        pathPrefix + "/servers/{serverName}/status",
 		Summary:     "Update status for all versions of an MCP server",
-		Description: "Update the status metadata of all versions of an MCP server in a single transaction. Requires publish permission for the server. Either all versions are updated or none on failure.",
+		Description: "Update the status metadata of all versions of an MCP server in a single transaction. Requires publish or edit permission for the server. Either all versions are updated or none on failure.",
 		Tags:        []string{"servers"},
 		Security: []map[string][]string{
 			{"bearer": {}},
@@ -216,9 +218,11 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 			return nil, huma.Error500InternalServerError("Failed to get server", err)
 		}
 
-		// Verify publish permissions for this server
-		if !jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionPublish, claims.Permissions) {
-			return nil, huma.Error403Forbidden("You do not have publish permissions for this server")
+		// Verify publish or edit permissions for this server
+		hasPublish := jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionPublish, claims.Permissions)
+		hasEdit := jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionEdit, claims.Permissions)
+		if !hasPublish && !hasEdit {
+			return nil, huma.Error403Forbidden("You do not have publish or edit permissions for this server")
 		}
 
 		// Build status change request

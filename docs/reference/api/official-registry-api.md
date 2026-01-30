@@ -38,9 +38,10 @@ The official registry enforces additional [package validation requirements](../s
 The official registry extends the `GET /v0.1/servers` endpoint with additional query parameters for improved discovery and synchronization:
 
 - `updated_since` - Filter servers updated after RFC3339 timestamp (e.g., `2025-08-07T13:15:04.280Z`)
-- `search` - Case-insensitive substring search on server names (e.g., `filesystem`)  
+- `search` - Case-insensitive substring search on server names (e.g., `filesystem`)
     - This is intentionally simple. For more advanced searching and filtering, use a subregistry.
 - `version` - Filter by version (currently supports `latest` for latest versions only)
+- `include_deleted` - Include deleted servers in results (default: `false`, but automatically `true` when `updated_since` is provided for incremental sync)
 
 These extensions enable efficient incremental synchronization for downstream registries and improved server discovery. Parameters can be combined and work with standard cursor-based pagination.
 
@@ -54,6 +55,25 @@ Example: `GET /v0.1/servers?search=filesystem&updated_since=2025-08-01T00:00:00Z
 - POST `/v0.1/auth/github-at` - Exchange GitHub access token for auth token
 - POST `/v0.1/auth/github-oidc` - Exchange GitHub OIDC token for auth token
 - POST `/v0.1/auth/oidc` - Exchange Google OIDC token for auth token (for admins)
+
+#### Status endpoints
+- PATCH `/v0.1/servers/{serverName}/versions/{version}/status` - Update status of a specific server version
+- PATCH `/v0.1/servers/{serverName}/status` - Update status of all versions of a server
+
+**Server Status Values:**
+- `active` - Server is active and visible in default listings
+- `deprecated` - Server is deprecated but still visible with a warning message
+- `deleted` - Server is hidden from default listings (use `include_deleted=true` to show)
+
+**Request body:**
+```json
+{
+  "status": "deprecated",
+  "statusMessage": "Please upgrade to version 2.0.0"
+}
+```
+
+Requires `publish` or `edit` permission for the server namespace.
 
 #### Admin endpoints
 - GET `/metrics` - Prometheus metrics endpoint

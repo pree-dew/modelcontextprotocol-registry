@@ -259,7 +259,24 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 			expectedError:  "Invalid or expired Registry JWT token",
 		},
 		{
-			name:       "permission denied - no publish permissions",
+			name:       "permission denied - no publish or edit permissions",
+			serverName: "io.github.testuser/active-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: "read", ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "deprecated",
+			},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "You do not have publish or edit permissions for this server",
+		},
+		{
+			name:       "successful status change with edit permission only",
 			serverName: "io.github.testuser/active-server",
 			version:    "1.0.0",
 			authClaims: &auth.JWTClaims{
@@ -272,8 +289,32 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 			requestBody: v0.UpdateServerStatusBody{
 				Status: "deprecated",
 			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have publish permissions",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
+				t.Helper()
+				assert.Equal(t, model.StatusDeprecated, resp.Meta.Official.Status)
+			},
+		},
+		{
+			name:       "successful status change with both publish and edit permissions",
+			serverName: "io.github.testuser/active-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "active",
+			},
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *apiv0.ServerResponse) {
+				t.Helper()
+				assert.Equal(t, model.StatusActive, resp.Meta.Official.Status)
+			},
 		},
 		{
 			name:       "permission denied - wrong namespace",
@@ -290,7 +331,7 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				Status: "deprecated",
 			},
 			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have publish permissions",
+			expectedError:  "You do not have publish or edit permissions for this server",
 		},
 		{
 			name:       "server not found",
@@ -671,7 +712,23 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 			expectedError:  "Invalid Authorization header format",
 		},
 		{
-			name:       "permission denied - no publish permissions",
+			name:       "permission denied - no publish or edit permissions",
+			serverName: "io.github.testuser/multi-version-server",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: "read", ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "deprecated",
+			},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "You do not have publish or edit permissions for this server",
+		},
+		{
+			name:       "successful status change with edit permission only",
 			serverName: "io.github.testuser/multi-version-server",
 			authClaims: &auth.JWTClaims{
 				AuthMethod:        auth.MethodGitHubAT,
@@ -683,8 +740,37 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 			requestBody: v0.UpdateServerStatusBody{
 				Status: "deprecated",
 			},
-			expectedStatus: http.StatusForbidden,
-			expectedError:  "You do not have publish permissions",
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *v0.UpdateAllVersionsStatusResponse) {
+				t.Helper()
+				assert.Equal(t, 3, resp.UpdatedCount)
+				for _, server := range resp.Servers {
+					assert.Equal(t, model.StatusDeprecated, server.Meta.Official.Status)
+				}
+			},
+		},
+		{
+			name:       "successful status change with both publish and edit permissions",
+			serverName: "io.github.testuser/multi-version-server",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
+					{Action: auth.PermissionActionEdit, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "active",
+			},
+			expectedStatus: http.StatusOK,
+			checkResult: func(t *testing.T, resp *v0.UpdateAllVersionsStatusResponse) {
+				t.Helper()
+				assert.Equal(t, 3, resp.UpdatedCount)
+				for _, server := range resp.Servers {
+					assert.Equal(t, model.StatusActive, server.Meta.Official.Status)
+				}
+			},
 		},
 		{
 			name:       "server not found",

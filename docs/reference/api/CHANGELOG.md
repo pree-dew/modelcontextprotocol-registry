@@ -2,6 +2,41 @@
 
 Changes to the REST API endpoints and responses.
 
+## Unreleased
+
+### Added
+
+#### Server Status Management Endpoints
+
+New endpoints for managing server lifecycle status:
+
+- `PATCH /v0/servers/{serverName}/versions/{version}/status` - Update status of a specific server version
+- `PATCH /v0/servers/{serverName}/status` - Update status of all versions of a server in a single transaction
+
+**Request body:**
+```json
+{
+  "status": "deprecated",
+  "statusMessage": "Please upgrade to version 2.0.0"
+}
+```
+
+**Status values:**
+- `active` - Server is active and visible in default listings
+- `deprecated` - Server is deprecated but still visible with a warning message
+- `deleted` - Server is hidden from default listings
+
+**Authentication:** Requires `publish` or `edit` permission for the server namespace.
+
+#### Server List Filtering Enhancement
+
+New query parameter for the `GET /v0/servers` endpoint:
+
+- `include_deleted` - Include deleted servers in results (default: `false`)
+  - Automatically set to `true` when `updated_since` is provided to support incremental synchronization
+
+**Example:** `GET /v0/servers?include_deleted=true`
+
 ## 2025-10-17
 
 ### Added
