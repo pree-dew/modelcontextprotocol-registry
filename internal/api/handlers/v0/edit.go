@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/registry/internal/config"
 	"github.com/modelcontextprotocol/registry/internal/database"
 	"github.com/modelcontextprotocol/registry/internal/service"
+	"github.com/modelcontextprotocol/registry/internal/validators"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
 
@@ -90,7 +91,12 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 			return nil, huma.Error400BadRequest("Version in request body must match URL path parameter")
 		}
 
-		// Update the server using the service (no status change - use the status endpoint for that)
+		// Validate server JSON structure and schema (returns 422 on validation failure)
+		validationResult := validators.ValidateServerJSON(&input.Body, validators.ValidationSchemaVersionAndSemantic)
+		if !validationResult.Valid {
+			return nil, huma.Error422UnprocessableEntity("Failed to edit server, invalid schema: call /validate for details")
+		}
+
 		updatedServer, err := registry.UpdateServer(ctx, serverName, version, &input.Body, nil)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
