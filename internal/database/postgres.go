@@ -247,26 +247,41 @@ func (db *PostgreSQL) ListServers(
 }
 
 // GetServerByName retrieves the latest version of a server by server name
-func (db *PostgreSQL) GetServerByName(ctx context.Context, tx pgx.Tx, serverName string) (*apiv0.ServerResponse, error) {
+func (db *PostgreSQL) GetServerByName(ctx context.Context, tx pgx.Tx, serverName string, includeDeleted bool) (*apiv0.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	query := `
+	// Build filter conditions
+	isLatest := true
+	filter := &ServerFilter{
+		Name:           &serverName,
+		IsLatest:       &isLatest,
+		IncludeDeleted: &includeDeleted,
+	}
+
+	argIndex := 1
+	whereConditions, args, _ := buildFilterConditions(filter, argIndex)
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	query := fmt.Sprintf(`
 		SELECT server_name, version, status, status_changed_at, status_message, published_at, updated_at, is_latest, value
 		FROM servers
-		WHERE server_name = $1 AND is_latest = true
+		%s
 		ORDER BY published_at DESC
 		LIMIT 1
-	`
+	`, whereClause)
 
 	var name, version, status string
 	var statusChangedAt, publishedAt, updatedAt time.Time
 	var statusMessage *string
-	var isLatest bool
 	var valueJSON []byte
 
-	err := db.getExecutor(tx).QueryRow(ctx, query, serverName).Scan(&name, &version, &status, &statusChangedAt, &statusMessage, &publishedAt, &updatedAt, &isLatest, &valueJSON)
+	err := db.getExecutor(tx).QueryRow(ctx, query, args...).Scan(&name, &version, &status, &statusChangedAt, &statusMessage, &publishedAt, &updatedAt, &isLatest, &valueJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -299,17 +314,32 @@ func (db *PostgreSQL) GetServerByName(ctx context.Context, tx pgx.Tx, serverName
 }
 
 // GetServerByNameAndVersion retrieves a specific version of a server by server name and version
-func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string) (*apiv0.ServerResponse, error) {
+func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string, includeDeleted bool) (*apiv0.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	query := `
+	// Build filter conditions
+	filter := &ServerFilter{
+		Name:           &serverName,
+		Version:        &version,
+		IncludeDeleted: &includeDeleted,
+	}
+
+	argIndex := 1
+	whereConditions, args, _ := buildFilterConditions(filter, argIndex)
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	query := fmt.Sprintf(`
 		SELECT server_name, version, status, status_changed_at, status_message, published_at, updated_at, is_latest, value
 		FROM servers
-		WHERE server_name = $1 AND version = $2
+		%s
 		LIMIT 1
-	`
+	`, whereClause)
 
 	var name, vers, status string
 	var statusChangedAt, publishedAt, updatedAt time.Time
@@ -317,7 +347,7 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 	var isLatest bool
 	var valueJSON []byte
 
-	err := db.getExecutor(tx).QueryRow(ctx, query, serverName, version).Scan(&name, &vers, &status, &statusChangedAt, &statusMessage, &publishedAt, &updatedAt, &isLatest, &valueJSON)
+	err := db.getExecutor(tx).QueryRow(ctx, query, args...).Scan(&name, &vers, &status, &statusChangedAt, &statusMessage, &publishedAt, &updatedAt, &isLatest, &valueJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -350,19 +380,33 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 }
 
 // GetAllVersionsByServerName retrieves all versions of a server by server name
-func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string) ([]*apiv0.ServerResponse, error) {
+func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, includeDeleted bool) ([]*apiv0.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	query := `
+	// Build filter conditions
+	filter := &ServerFilter{
+		Name:           &serverName,
+		IncludeDeleted: &includeDeleted,
+	}
+
+	argIndex := 1
+	whereConditions, args, _ := buildFilterConditions(filter, argIndex)
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	query := fmt.Sprintf(`
 		SELECT server_name, version, status, status_changed_at, status_message, published_at, updated_at, is_latest, value
 		FROM servers
-		WHERE server_name = $1
+		%s
 		ORDER BY published_at DESC
-	`
+	`, whereClause)
 
-	rows, err := db.getExecutor(tx).Query(ctx, query, serverName)
+	rows, err := db.getExecutor(tx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query server versions: %w", err)
 	}

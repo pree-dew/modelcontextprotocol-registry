@@ -139,7 +139,7 @@ func TestPostgreSQL_GetServerByName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := db.GetServerByName(ctx, nil, tt.serverName)
+			result, err := db.GetServerByName(ctx, nil, tt.serverName, false)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -214,7 +214,7 @@ func TestPostgreSQL_GetServerByNameAndVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := db.GetServerByNameAndVersion(ctx, nil, tt.serverName, tt.version)
+			result, err := db.GetServerByNameAndVersion(ctx, nil, tt.serverName, tt.version, false)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -587,7 +587,7 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify server was created
-		result, err := db.GetServerByName(ctx, nil, "com.example/transaction-success")
+		result, err := db.GetServerByName(ctx, nil, "com.example/transaction-success", false)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 	})
@@ -621,7 +621,7 @@ func TestPostgreSQL_TransactionHandling(t *testing.T) {
 		assert.Equal(t, assert.AnError, err)
 
 		// Verify server was NOT created due to rollback
-		result, err := db.GetServerByName(ctx, nil, "com.example/transaction-rollback")
+		result, err := db.GetServerByName(ctx, nil, "com.example/transaction-rollback", false)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, database.ErrNotFound)
 		assert.Nil(t, result)
@@ -755,7 +755,7 @@ func TestPostgreSQL_HelperMethods(t *testing.T) {
 	})
 
 	t.Run("GetAllVersionsByServerName", func(t *testing.T) {
-		allVersions, err := db.GetAllVersionsByServerName(ctx, nil, serverName)
+		allVersions, err := db.GetAllVersionsByServerName(ctx, nil, serverName, false)
 		assert.NoError(t, err)
 		assert.Len(t, allVersions, 3)
 
@@ -983,7 +983,8 @@ func TestPostgreSQL_EdgeCases(t *testing.T) {
 				}
 
 				// Verify the server is in the expected starting status
-				currentServer, err := db.GetServerByNameAndVersion(ctx, nil, testServerName, testVersion)
+				// Use includeDeleted=true since we test transitions involving deleted status
+				currentServer, err := db.GetServerByNameAndVersion(ctx, nil, testServerName, testVersion, true)
 				require.NoError(t, err)
 				assert.Equal(t, tt.fromStatus, currentServer.Meta.Official.Status, "server should be in %s status before transition", tt.fromStatus)
 
@@ -1031,7 +1032,7 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 		assert.Equal(t, versionCount, count)
 
 		// Test getting all versions
-		allVersions, err := db.GetAllVersionsByServerName(ctx, nil, serverName)
+		allVersions, err := db.GetAllVersionsByServerName(ctx, nil, serverName, false)
 		assert.NoError(t, err)
 		assert.Len(t, allVersions, versionCount)
 
@@ -1109,7 +1110,7 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve and verify status_changed_at
-		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version, false)
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
 		assert.Equal(t, timeNow.Unix(), result.Meta.Official.StatusChangedAt.Unix())
@@ -1136,7 +1137,7 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve and verify status_message
-		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version, false)
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
 		assert.NotNil(t, result.Meta.Official.StatusMessage)
@@ -1164,8 +1165,8 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
 		require.NoError(t, err)
 
-		// Retrieve and verify deleted status with all fields
-		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		// Retrieve and verify deleted status with all fields (need includeDeleted=true)
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version, true)
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
 		assert.Equal(t, model.StatusDeleted, result.Meta.Official.Status)
@@ -1194,7 +1195,7 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve and verify nil fields are handled correctly
-		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+		result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version, false)
 		require.NoError(t, err)
 		assert.NotNil(t, result.Meta.Official)
 		assert.Nil(t, result.Meta.Official.StatusMessage)
@@ -1248,8 +1249,8 @@ func TestPostgreSQL_NewStatusFields(t *testing.T) {
 			_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
 			assert.NoError(t, err, "Should be able to create server with status: %s", status)
 
-			// Verify the status was set correctly
-			result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version)
+			// Verify the status was set correctly (use includeDeleted=true since we test all statuses including deleted)
+			result, err := db.GetServerByNameAndVersion(ctx, nil, serverJSON.Name, serverJSON.Version, true)
 			require.NoError(t, err)
 			assert.Equal(t, status, result.Meta.Official.Status)
 		}
@@ -1342,7 +1343,8 @@ func TestPostgreSQL_StatusFieldsInListOperations(t *testing.T) {
 
 	t.Run("GetServerByName includes new status fields", func(t *testing.T) {
 		for _, testServer := range testServers {
-			result, err := db.GetServerByName(ctx, nil, testServer.name)
+			// Use includeDeleted=true since testServers includes deleted status
+			result, err := db.GetServerByName(ctx, nil, testServer.name, true)
 			require.NoError(t, err)
 
 			assert.NotNil(t, result.Meta.Official)
@@ -1403,7 +1405,7 @@ func TestPostgreSQL_SetAllVersionsStatus(t *testing.T) {
 
 		// Verify by fetching each version individually
 		for _, version := range versions {
-			server, err := db.GetServerByNameAndVersion(ctx, nil, serverName, version)
+			server, err := db.GetServerByNameAndVersion(ctx, nil, serverName, version, false)
 			require.NoError(t, err)
 			assert.Equal(t, model.StatusDeprecated, server.Meta.Official.Status)
 			assert.NotNil(t, server.Meta.Official.StatusMessage)

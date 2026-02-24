@@ -99,7 +99,8 @@ func RegisterStatusEndpoints(api huma.API, pathPrefix string, registry service.R
 		newStatus := model.Status(input.Body.Status)
 
 		// Get the server and verify it exists
-		currentServer, err := registry.GetServerByNameAndVersion(ctx, serverName, version)
+		// Include deleted servers since we need to be able to restore them
+		currentServer, err := registry.GetServerByNameAndVersion(ctx, serverName, version, true)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server version not found")
@@ -210,7 +211,8 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 		}
 
 		// Get any version to verify server exists and check permissions
-		currentServer, err := registry.GetServerByName(ctx, serverName)
+		// Include deleted servers since we need to be able to restore them
+		currentServer, err := registry.GetServerByName(ctx, serverName, true)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
@@ -223,6 +225,19 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 		hasEdit := jwtManager.HasPermission(currentServer.Server.Name, auth.PermissionActionEdit, claims.Permissions)
 		if !hasPublish && !hasEdit {
 			return nil, huma.Error403Forbidden("You do not have publish or edit permissions for this server")
+		}
+
+		newStatus := model.Status(input.Body.Status)
+
+		// Fetch all versions to validate the bulk status transition
+		allVersions, err := registry.GetAllVersionsByServerName(ctx, serverName, true)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("Failed to get server versions", err)
+		}
+
+		// Validate bulk status transition - reject if no changes would occur
+		if err := validateBulkStatusTransition(allVersions, newStatus, input.Body); err != nil {
+			return nil, err
 		}
 
 		// Build status change request
@@ -250,6 +265,34 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 			},
 		}, nil
 	})
+}
+
+// validateBulkStatusTransition validates if a bulk status transition would result in any changes
+// Returns an error if no changes would occur (all versions already have target status and no metadata updates)
+func validateBulkStatusTransition(versions []*apiv0.ServerResponse, newStatus model.Status, body UpdateServerStatusBody) error {
+	if len(versions) == 0 {
+		return nil
+	}
+
+	// Check if any version will actually change status
+	anyStatusChange := false
+	for _, version := range versions {
+		if version.Meta.Official == nil {
+			anyStatusChange = true
+			break
+		}
+		if version.Meta.Official.Status != newStatus {
+			anyStatusChange = true
+			break
+		}
+	}
+
+	// If no status changes and no metadata updates, reject as no-op
+	if !anyStatusChange && !hasMetadataFieldsToUpdate(body) {
+		return huma.Error400BadRequest(fmt.Sprintf("No changes to apply: all versions already have status %s", newStatus))
+	}
+
+	return nil
 }
 
 // isValidStatusTransition checks if a status transition is allowed

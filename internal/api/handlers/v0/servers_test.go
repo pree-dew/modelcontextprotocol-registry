@@ -468,11 +468,11 @@ func TestListServersDeletedFiltering(t *testing.T) {
 			checkDeleted:   true,
 		},
 		{
-			name:           "updated_since overrides include_deleted=false",
+			name:           "updated_since with include_deleted=false returns error",
 			queryParams:    "?updated_since=1990-01-01T00:00:00Z&include_deleted=false",
-			expectedStatus: http.StatusOK,
-			expectedCount:  3,
-			checkDeleted:   true,
+			expectedStatus: http.StatusBadRequest,
+			expectedCount:  0,
+			checkDeleted:   false,
 		},
 	}
 
@@ -484,6 +484,11 @@ func TestListServersDeletedFiltering(t *testing.T) {
 			mux.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			// Skip response body checks for error responses
+			if tt.expectedStatus != http.StatusOK {
+				return
+			}
 
 			var resp apiv0.ServerListResponse
 			err := json.NewDecoder(w.Body).Decode(&resp)

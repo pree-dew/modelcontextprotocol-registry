@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -16,14 +17,35 @@ import (
 
 const errRecordNotFound = "record not found"
 
+// OptionalBool tracks whether a bool query parameter was explicitly set
+type OptionalBool struct {
+	Value bool
+	IsSet bool
+}
+
+// Schema implements huma.SchemaProvider - returns schema for the wrapped type
+func (o OptionalBool) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeOf(o.Value))
+}
+
+// Receiver implements huma.ParamWrapper - exposes wrapped value to receive parsed value
+func (o *OptionalBool) Receiver() reflect.Value {
+	return reflect.ValueOf(o).Elem().Field(0)
+}
+
+// OnParamSet implements huma.ParamReactor - tracks whether parameter was set in request
+func (o *OptionalBool) OnParamSet(isSet bool, parsed any) {
+	o.IsSet = isSet
+}
+
 // ListServersInput represents the input for listing servers
 type ListServersInput struct {
-	Cursor         string `query:"cursor" doc:"Pagination cursor" required:"false" example:"server-cursor-123"`
-	Limit          int    `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
-	UpdatedSince   string `query:"updated_since" doc:"Filter servers updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
-	Search         string `query:"search" doc:"Search servers by name (substring match)" required:"false" example:"filesystem"`
-	Version        string `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
-	IncludeDeleted bool   `query:"include_deleted" doc:"Include deleted servers in results (default: false, but always true when updated_since is provided)" required:"false" default:"false"`
+	Cursor         string       `query:"cursor" doc:"Pagination cursor" required:"false" example:"server-cursor-123"`
+	Limit          int          `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
+	UpdatedSince   string       `query:"updated_since" doc:"Filter servers updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
+	Search         string       `query:"search" doc:"Search servers by name (substring match)" required:"false" example:"filesystem"`
+	Version        string       `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
+	IncludeDeleted OptionalBool `query:"include_deleted" doc:"Include deleted servers in results (default: false, but always true when updated_since is provided)" required:"false"`
 }
 
 // ServerDetailInput represents the input for getting server details
@@ -33,13 +55,15 @@ type ServerDetailInput struct {
 
 // ServerVersionDetailInput represents the input for getting a specific version
 type ServerVersionDetailInput struct {
-	ServerName string `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
-	Version    string `path:"version" doc:"URL-encoded server version" example:"1.0.0"`
+	ServerName     string `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
+	Version        string `path:"version" doc:"URL-encoded server version" example:"1.0.0"`
+	IncludeDeleted bool   `query:"include_deleted" doc:"Include deleted servers in results (default: false)" required:"false" default:"false"`
 }
 
 // ServerVersionsInput represents the input for listing all versions of a server
 type ServerVersionsInput struct {
-	ServerName string `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
+	ServerName     string `path:"serverName" doc:"URL-encoded server name" example:"com.example%2Fmy-server"`
+	IncludeDeleted bool   `query:"include_deleted" doc:"Include deleted servers in results (default: false)" required:"false" default:"false"`
 }
 
 // RegisterServersEndpoints registers all server-related endpoints with a custom path prefix
@@ -84,12 +108,16 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		}
 
 		// Handle include_deleted parameter
-		// When updated_since is provided, always include deleted for incremental sync
 		if filter.UpdatedSince != nil {
+			// When updated_since is provided, include_deleted must be true for incremental sync
+			if input.IncludeDeleted.IsSet && !input.IncludeDeleted.Value {
+				return nil, huma.Error400BadRequest("Cannot set include_deleted=false when using updated_since (incremental sync requires deleted servers)")
+			}
 			includeDeleted := true
 			filter.IncludeDeleted = &includeDeleted
 		} else {
-			filter.IncludeDeleted = &input.IncludeDeleted
+			// Use provided value, defaults to false if not set
+			filter.IncludeDeleted = &input.IncludeDeleted.Value
 		}
 
 		// Get paginated results with filtering
@@ -139,9 +167,9 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		var serverResponse *apiv0.ServerResponse
 		// Handle "latest" as a special version
 		if version == "latest" {
-			serverResponse, err = registry.GetServerByName(ctx, serverName)
+			serverResponse, err = registry.GetServerByName(ctx, serverName, input.IncludeDeleted)
 		} else {
-			serverResponse, err = registry.GetServerByNameAndVersion(ctx, serverName, version)
+			serverResponse, err = registry.GetServerByNameAndVersion(ctx, serverName, version, input.IncludeDeleted)
 		}
 
 		if err != nil {
@@ -172,7 +200,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		}
 
 		// Get all versions for this server
-		servers, err := registry.GetAllVersionsByServerName(ctx, serverName)
+		servers, err := registry.GetAllVersionsByServerName(ctx, serverName, input.IncludeDeleted)
 		if err != nil {
 			if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")

@@ -271,3 +271,41 @@ func TestStatusCommand_MissingStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusCommand_YesFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "all-versions with --yes flag",
+			args: []string{"--status", "deprecated", "--all-versions", "--yes", "io.github.user/my-server"},
+		},
+		{
+			name: "all-versions with -y shorthand",
+			args: []string{"--status", "deprecated", "--all-versions", "-y", "io.github.user/my-server"},
+		},
+		{
+			name: "yes flag with single version (flag accepted but not used)",
+			args: []string{"--status", "deprecated", "--yes", "io.github.user/my-server", "1.0.0"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := commands.StatusCommand(tt.args)
+			// All these should pass CLI validation
+			// They may fail at auth or API level which is acceptable
+			if err != nil {
+				// Just check it's not a validation error
+				if strings.Contains(err.Error(), "invalid status") ||
+					strings.Contains(err.Error(), "server name is required") ||
+					strings.Contains(err.Error(), "version is required unless") ||
+					strings.Contains(err.Error(), "--status flag is required") ||
+					strings.Contains(err.Error(), "flag provided but not defined") {
+					t.Errorf("Validation failed unexpectedly: %v", err)
+				}
+			}
+		})
+	}
+}
