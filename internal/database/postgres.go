@@ -80,6 +80,7 @@ func NewPostgreSQL(ctx context.Context, connectionURI string) (*PostgreSQL, erro
 }
 
 // buildFilterConditions constructs WHERE clause conditions from a ServerFilter
+//
 //nolint:unparam // argIndex is always 1 currently but kept for API flexibility
 func buildFilterConditions(filter *ServerFilter, argIndex int) ([]string, []any, int) {
 	var conditions []string
