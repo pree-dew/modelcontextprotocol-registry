@@ -34,8 +34,22 @@ func (o *OptionalBool) Receiver() reflect.Value {
 }
 
 // OnParamSet implements huma.ParamReactor - tracks whether parameter was set in request
-func (o *OptionalBool) OnParamSet(isSet bool, parsed any) {
+func (o *OptionalBool) OnParamSet(isSet bool, _ any) {
 	o.IsSet = isSet
+}
+
+// resolveIncludeDeleted handles the include_deleted parameter logic for list endpoints
+// Returns the resolved value and an error if include_deleted=false conflicts with updated_since
+func resolveIncludeDeleted(includeDeleted OptionalBool, hasUpdatedSince bool) (bool, error) {
+	if hasUpdatedSince {
+		// When updated_since is provided, include_deleted must be true for incremental sync
+		if includeDeleted.IsSet && !includeDeleted.Value {
+			return false, huma.Error400BadRequest("Cannot set include_deleted=false when using updated_since (incremental sync requires deleted servers)")
+		}
+		return true, nil
+	}
+	// Use provided value, defaults to false if not set
+	return includeDeleted.Value, nil
 }
 
 // ListServersInput represents the input for listing servers
@@ -108,17 +122,11 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		}
 
 		// Handle include_deleted parameter
-		if filter.UpdatedSince != nil {
-			// When updated_since is provided, include_deleted must be true for incremental sync
-			if input.IncludeDeleted.IsSet && !input.IncludeDeleted.Value {
-				return nil, huma.Error400BadRequest("Cannot set include_deleted=false when using updated_since (incremental sync requires deleted servers)")
-			}
-			includeDeleted := true
-			filter.IncludeDeleted = &includeDeleted
-		} else {
-			// Use provided value, defaults to false if not set
-			filter.IncludeDeleted = &input.IncludeDeleted.Value
+		includeDeleted, err := resolveIncludeDeleted(input.IncludeDeleted, filter.UpdatedSince != nil)
+		if err != nil {
+			return nil, err
 		}
+		filter.IncludeDeleted = &includeDeleted
 
 		// Get paginated results with filtering
 		servers, nextCursor, err := registry.ListServers(ctx, filter, input.Cursor, input.Limit)

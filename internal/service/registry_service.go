@@ -299,7 +299,7 @@ func (s *registryServiceImpl) updateAllVersionsStatusInTransaction(ctx context.C
 
 	// When transitioning to active, validate remote URLs for any versions currently deleted
 	if statusChange.NewStatus == model.StatusActive {
-		var includeDeleted bool = true
+		includeDeleted := true
 
 		// When transitioning to active, it means the current status is either deprecated or deleted, so it should include deleted server also
 		filter := &database.ServerFilter{Name: &serverName, IncludeDeleted: &includeDeleted}
