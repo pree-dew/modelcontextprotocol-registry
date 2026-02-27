@@ -13,14 +13,6 @@ New endpoints for managing server lifecycle status:
 - `PATCH /v0/servers/{serverName}/versions/{version}/status` - Update status of a specific server version
 - `PATCH /v0/servers/{serverName}/status` - Update status of all versions of a server in a single transaction
 
-**Request body:**
-```json
-{
-  "status": "deprecated",
-  "statusMessage": "Please upgrade to version 2.0.0"
-}
-```
-
 **Status values:**
 - `active` - Server is active and visible in default listings
 - `deprecated` - Server is deprecated but still visible with a warning message
@@ -28,14 +20,20 @@ New endpoints for managing server lifecycle status:
 
 **Authentication:** Requires `publish` or `edit` permission for the server namespace.
 
-#### Server List Filtering Enhancement
+#### New Response Fields
 
-New query parameter for the `GET /v0/servers` endpoint:
+New fields added to `_meta["io.modelcontextprotocol.registry/official"]` (RegistryExtensions):
 
-- `include_deleted` - Include deleted servers in results (default: `false`)
-  - Automatically set to `true` when `updated_since` is provided to support incremental synchronization
+- `statusChangedAt` - Timestamp when the server status was last changed
+- `statusMessage` - Optional message explaining status change (e.g., deprecation reason, migration guidance)
 
-**Example:** `GET /v0/servers?include_deleted=true`
+#### Server Filtering Enhancements
+
+New `include_deleted` query parameter added to multiple endpoints:
+
+- `GET /v0/servers` - Include deleted servers in list results (default: `false`, automatically `true` when `updated_since` is provided)
+- `GET /v0/servers/{serverName}/versions/{version}` - Include deleted servers in detail results (default: `false`)
+- `GET /v0/servers/{serverName}/versions` - Include deleted servers in version history (default: `false`)
 
 ## 2025-10-17
 

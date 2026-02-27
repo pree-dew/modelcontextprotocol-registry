@@ -287,8 +287,9 @@ mcp-publisher status --status <active|deprecated|deleted> [flags] <server-name> 
 
 **Flags:**
 - `--status` (required) - New status: `active`, `deprecated`, or `deleted`
-- `--message` - Optional message explaining the status change
+- `--message` - Optional message explaining the status change (not allowed when status is `active`)
 - `--all-versions` - Apply status change to all versions of the server
+- `--yes`, `-y` - Skip confirmation prompt (only applies when using `--all-versions`)
 
 **Arguments:**
 - `server-name` - Full server name (e.g., `io.github.user/my-server`)

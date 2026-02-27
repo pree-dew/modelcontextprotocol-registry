@@ -47,6 +47,27 @@ These extensions enable efficient incremental synchronization for downstream reg
 
 Example: `GET /v0.1/servers?search=filesystem&updated_since=2025-08-01T00:00:00Z&version=latest`
 
+### Server Detail
+
+The `GET /v0.1/servers/{serverName}/versions/{version}` endpoint returns detailed information about a specific server version.
+
+**Path parameters:**
+- `serverName` - URL-encoded server name (e.g., `io.github.user%2Fmy-server`)
+- `version` - Server version or `latest` for the most recent version
+
+**Query parameters:**
+- `include_deleted` - Include deleted servers in results (default: `false`)
+
+### Server Version History
+
+The `GET /v0.1/servers/{serverName}/versions` endpoint returns all versions of a server.
+
+**Path parameters:**
+- `serverName` - URL-encoded server name (e.g., `io.github.user%2Fmy-server`)
+
+**Query parameters:**
+- `include_deleted` - Include deleted servers in results (default: `false`)
+
 ### Additional endpoints
 
 #### Auth endpoints
@@ -57,23 +78,36 @@ Example: `GET /v0.1/servers?search=filesystem&updated_since=2025-08-01T00:00:00Z
 - POST `/v0.1/auth/oidc` - Exchange Google OIDC token for auth token (for admins)
 
 #### Status endpoints
-- PATCH `/v0.1/servers/{serverName}/versions/{version}/status` - Update status of a specific server version
-- PATCH `/v0.1/servers/{serverName}/status` - Update status of all versions of a server
 
-**Server Status Values:**
+##### Update Single Version Status
+
+`PATCH /v0.1/servers/{serverName}/versions/{version}/status` - Update status of a specific server version.
+
+**Path parameters:**
+- `serverName` - URL-encoded server name (e.g., `io.github.user%2Fmy-server`)
+- `version` - Server version to update
+
+**Request body:**
+- `status` (required) - New status: `active`, `deprecated`, or `deleted`
+- `statusMessage` (optional) - Message explaining the status change (max 500 characters, not allowed when status is `active`)
+
+##### Update All Versions Status
+
+`PATCH /v0.1/servers/{serverName}/status` - Update status of all versions of a server in a single transaction.
+
+**Path parameters:**
+- `serverName` - URL-encoded server name (e.g., `io.github.user%2Fmy-server`)
+
+**Request body:**
+- `status` (required) - New status: `active`, `deprecated`, or `deleted`
+- `statusMessage` (optional) - Message explaining the status change (max 500 characters, not allowed when status is `active`)
+
+**Status values:**
 - `active` - Server is active and visible in default listings
 - `deprecated` - Server is deprecated but still visible with a warning message
 - `deleted` - Server is hidden from default listings (use `include_deleted=true` to show)
 
-**Request body:**
-```json
-{
-  "status": "deprecated",
-  "statusMessage": "Please upgrade to version 2.0.0"
-}
-```
-
-Requires `publish` or `edit` permission for the server namespace.
+**Authentication:** Requires `publish` or `edit` permission for the server namespace.
 
 #### Admin endpoints
 - GET `/metrics` - Prometheus metrics endpoint

@@ -583,9 +583,14 @@ func (db *PostgreSQL) SetServerStatus(ctx context.Context, tx pgx.Tx, serverName
 	}
 
 	// Update the status and related fields
+	// Only update status_changed_at when status actually changes
 	query := `
 		UPDATE servers
-		SET status = $1, status_changed_at = NOW(), updated_at = NOW(), status_message = $4
+		SET
+			status = $1,
+			status_changed_at = CASE WHEN status != $1::varchar THEN NOW() ELSE status_changed_at END,
+			updated_at = NOW(),
+			status_message = $4
 		WHERE server_name = $2 AND version = $3
 		RETURNING server_name, version, status, value, published_at, updated_at, is_latest, status_changed_at, status_message
 	`
@@ -635,10 +640,17 @@ func (db *PostgreSQL) SetAllVersionsStatus(ctx context.Context, tx pgx.Tx, serve
 	}
 
 	// Update the status and related fields for all versions
+	// Only update rows where status or status_message actually changes
+	// Only update status_changed_at when status actually changes
 	query := `
 		UPDATE servers
-		SET status = $1, status_changed_at = NOW(), updated_at = NOW(), status_message = $2
+		SET
+			status = $1,
+			status_changed_at = CASE WHEN status != $1::varchar THEN NOW() ELSE status_changed_at END,
+			updated_at = NOW(),
+			status_message = $2
 		WHERE server_name = $3
+			AND (status != $1::varchar OR status_message IS DISTINCT FROM $2)
 		RETURNING server_name, version, status, value, published_at, updated_at, is_latest, status_changed_at, status_message
 	`
 

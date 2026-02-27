@@ -373,6 +373,24 @@ func TestUpdateServerStatusEndpoint(t *testing.T) {
 				assert.Equal(t, "Updated deprecation message", *resp.Meta.Official.StatusMessage)
 			},
 		},
+		{
+			name:       "status_message rejected when setting status to active",
+			serverName: "io.github.testuser/deprecated-server",
+			version:    "1.0.0",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status:        "active",
+				StatusMessage: strPtr("This message should not be allowed"),
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "status_message cannot be provided when setting status to active",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -487,7 +505,7 @@ func TestUpdateServerStatusEndpointSameStatusTransition(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "No changes to apply: status is already active")
+	assert.Contains(t, w.Body.String(), "No changes to apply: status and message are already set to the provided values")
 }
 
 func TestUpdateServerStatusEndpointURLEncoding(t *testing.T) {
@@ -771,6 +789,22 @@ func TestUpdateAllVersionsStatusEndpoint(t *testing.T) {
 					assert.Equal(t, model.StatusActive, server.Meta.Official.Status)
 				}
 			},
+		},
+		{
+			name:       "bulk no-op when all versions already have target status and message",
+			serverName: "io.github.testuser/multi-version-server",
+			authClaims: &auth.JWTClaims{
+				AuthMethod:        auth.MethodGitHubAT,
+				AuthMethodSubject: "testuser",
+				Permissions: []auth.Permission{
+					{Action: auth.PermissionActionPublish, ResourcePattern: "io.github.testuser/*"},
+				},
+			},
+			requestBody: v0.UpdateServerStatusBody{
+				Status: "active",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "No changes to apply: all versions already have the requested status and message",
 		},
 		{
 			name:       "server not found",

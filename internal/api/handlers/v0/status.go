@@ -33,25 +33,42 @@ type UpdateServerStatusInput struct {
 }
 
 // validateStatusTransition validates if the status transition is allowed
+// Returns nil if status or message differs from current (something to update)
+// Returns error if nothing changes (no-op) or if status transition is invalid
 func validateStatusTransition(currentServer *apiv0.ServerResponse, newStatus model.Status, body UpdateServerStatusBody) error {
+	// Validate newStatus is a valid value
+	validStatuses := map[model.Status]bool{
+		model.StatusActive:     true,
+		model.StatusDeprecated: true,
+		model.StatusDeleted:    true,
+	}
+	if !validStatuses[newStatus] {
+		return huma.Error400BadRequest(fmt.Sprintf("Invalid status: %s. Must be one of: active, deprecated, deleted", newStatus))
+	}
+
+	// Reject status_message when setting status to active
+	if newStatus == model.StatusActive && body.StatusMessage != nil {
+		return huma.Error400BadRequest("status_message cannot be provided when setting status to active")
+	}
+
 	if currentServer.Meta.Official == nil {
 		return nil
 	}
 
 	currentStatus := currentServer.Meta.Official.Status
-	isSameStatus := currentStatus == newStatus
+	currentMessage := currentServer.Meta.Official.StatusMessage
+	newMessage := body.StatusMessage
 
-	// Reject same-status requests with no metadata updates (pointless no-op)
-	if isSameStatus && !hasMetadataFieldsToUpdate(body) {
-		return huma.Error400BadRequest(fmt.Sprintf("No changes to apply: status is already %s", currentStatus))
+	statusChanges := currentStatus != newStatus
+	messageChanges := (currentMessage == nil) != (newMessage == nil) ||
+		(currentMessage != nil && newMessage != nil && *currentMessage != *newMessage)
+
+	// Valid if either status or message changes
+	if statusChanges || messageChanges {
+		return nil
 	}
 
-	// Reject invalid status transitions (e.g., invalid status values)
-	if !isSameStatus && !isValidStatusTransition(currentStatus, newStatus) {
-		return huma.Error400BadRequest(fmt.Sprintf("Invalid status transition from %s to %s", currentStatus, newStatus))
-	}
-
-	return nil
+	return huma.Error400BadRequest("No changes to apply: status and message are already set to the provided values")
 }
 
 // RegisterStatusEndpoints registers the status update endpoint with a custom path prefix
@@ -153,12 +170,6 @@ func buildStatusChangeRequestFromBody(body UpdateServerStatusBody) *service.Stat
 		NewStatus:     newStatus,
 		StatusMessage: statusMessage,
 	}
-}
-
-// hasMetadataFieldsToUpdate checks if any metadata fields (statusMessage) are being updated
-func hasMetadataFieldsToUpdate(body UpdateServerStatusBody) bool {
-	// Allow updates if statusMessage is explicitly provided (even if empty, to clear it)
-	return body.StatusMessage != nil
 }
 
 // UpdateAllVersionsStatusInput represents the input for updating all versions' status
@@ -268,50 +279,22 @@ func RegisterAllVersionsStatusEndpoints(api huma.API, pathPrefix string, registr
 }
 
 // validateBulkStatusTransition validates if a bulk status transition would result in any changes
-// Returns an error if no changes would occur (all versions already have target status and no metadata updates)
+// Returns an error if no changes would occur (all versions already have target status and message)
 func validateBulkStatusTransition(versions []*apiv0.ServerResponse, newStatus model.Status, body UpdateServerStatusBody) error {
 	if len(versions) == 0 {
 		return nil
 	}
 
-	// Check if any version will actually change status
-	anyStatusChange := false
+	// Check if any version would have changes applied
 	for _, version := range versions {
-		if version.Meta.Official == nil {
-			anyStatusChange = true
-			break
-		}
-		if version.Meta.Official.Status != newStatus {
-			anyStatusChange = true
-			break
+		err := validateStatusTransition(version, newStatus, body)
+		if err == nil {
+			// This version has changes, so the bulk operation is valid
+			return nil
 		}
 	}
 
-	// If no status changes and no metadata updates, reject as no-op
-	if !anyStatusChange && !hasMetadataFieldsToUpdate(body) {
-		return huma.Error400BadRequest(fmt.Sprintf("No changes to apply: all versions already have status %s", newStatus))
-	}
-
-	return nil
+	// No versions would have any changes
+	return huma.Error400BadRequest("No changes to apply: all versions already have the requested status and message")
 }
 
-// isValidStatusTransition checks if a status transition is allowed
-// Allowed transitions:
-// - active ↔ deprecated ↔ deleted (all bidirectional transitions allowed)
-// - Same status transitions are NOT allowed (no-op)
-func isValidStatusTransition(currentStatus, newStatus model.Status) bool {
-	// Same status transition is not allowed (no-op)
-	if currentStatus == newStatus {
-		return false
-	}
-
-	// All transitions between active, deprecated, and deleted are allowed
-	validStatuses := map[model.Status]bool{
-		model.StatusActive:     true,
-		model.StatusDeprecated: true,
-		model.StatusDeleted:    true,
-	}
-
-	// Both current and new status must be valid
-	return validStatuses[currentStatus] && validStatuses[newStatus]
-}

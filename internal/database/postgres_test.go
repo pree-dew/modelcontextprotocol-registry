@@ -560,6 +560,72 @@ func TestPostgreSQL_SetServerStatus(t *testing.T) {
 	}
 }
 
+func TestPostgreSQL_StatusChangedAtBehavior(t *testing.T) {
+	db := database.NewTestDB(t)
+	ctx := context.Background()
+
+	t.Run("status_changed_at updates when status changes", func(t *testing.T) {
+		timeNow := time.Now()
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/status-changed-at-test",
+			Description: "Test server",
+			Version:     "1.0.0",
+		}
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusActive,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Wait a bit to ensure time difference
+		time.Sleep(10 * time.Millisecond)
+
+		// Change status from active to deprecated
+		result, err := db.SetServerStatus(ctx, nil, serverJSON.Name, serverJSON.Version, model.StatusDeprecated, nil)
+		require.NoError(t, err)
+
+		assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+		assert.True(t, result.Meta.Official.StatusChangedAt.After(timeNow), "status_changed_at should be updated")
+	})
+
+	t.Run("status_changed_at preserved when only message changes", func(t *testing.T) {
+		timeNow := time.Now()
+		serverJSON := &apiv0.ServerJSON{
+			Name:        "com.example/message-only-test",
+			Description: "Test server",
+			Version:     "1.0.0",
+		}
+		officialMeta := &apiv0.RegistryExtensions{
+			Status:          model.StatusDeprecated,
+			StatusChangedAt: timeNow,
+			PublishedAt:     timeNow,
+			UpdatedAt:       timeNow,
+			IsLatest:        true,
+		}
+
+		_, err := db.CreateServer(ctx, nil, serverJSON, officialMeta)
+		require.NoError(t, err)
+
+		// Wait a bit to ensure time difference
+		time.Sleep(10 * time.Millisecond)
+
+		// Update only the message, keep status the same
+		newMessage := "Updated message"
+		result, err := db.SetServerStatus(ctx, nil, serverJSON.Name, serverJSON.Version, model.StatusDeprecated, &newMessage)
+		require.NoError(t, err)
+
+		assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)
+		assert.Equal(t, "Updated message", *result.Meta.Official.StatusMessage)
+		// status_changed_at should NOT be updated since status didn't change
+		assert.True(t, result.Meta.Official.StatusChangedAt.Before(result.Meta.Official.UpdatedAt), "status_changed_at should be older than updated_at")
+	})
+}
+
 func TestPostgreSQL_TransactionHandling(t *testing.T) {
 	db := database.NewTestDB(t)
 	ctx := context.Background()

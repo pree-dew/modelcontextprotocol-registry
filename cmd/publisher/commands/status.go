@@ -287,7 +287,7 @@ func fetchVersionStatus(registryURL, serverName, version, token string) (string,
 
 	encodedServerName := url.PathEscape(serverName)
 	encodedVersion := url.PathEscape(version)
-	fetchURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion
+	fetchURL := registryURL + "v0/servers/" + encodedServerName + "/versions/" + encodedVersion + "?include_deleted=true"
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fetchURL, nil)
 	if err != nil {
@@ -330,7 +330,7 @@ func fetchAllVersionsStatus(registryURL, serverName, token string) ([]VersionInf
 	}
 
 	encodedServerName := url.PathEscape(serverName)
-	fetchURL := registryURL + "v0/servers/" + encodedServerName + "/versions"
+	fetchURL := registryURL + "v0/servers/" + encodedServerName + "/versions?include_deleted=true"
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fetchURL, nil)
 	if err != nil {

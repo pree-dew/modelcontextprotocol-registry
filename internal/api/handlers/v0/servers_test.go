@@ -634,3 +634,137 @@ func TestServersEndpointEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestIncludeDeletedOnDetailEndpoints(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+
+	serverName := "com.example/deleted-detail-test"
+
+	// Create server with multiple versions
+	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        serverName,
+		Description: "Test server v1",
+		Version:     "1.0.0",
+	})
+	require.NoError(t, err)
+
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        serverName,
+		Description: "Test server v2",
+		Version:     "2.0.0",
+	})
+	require.NoError(t, err)
+
+	// Delete version 1.0.0
+	_, err = registryService.UpdateServerStatus(ctx, serverName, "1.0.0", &service.StatusChangeRequest{
+		NewStatus: model.StatusDeleted,
+	})
+	require.NoError(t, err)
+
+	// Create API
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterServersEndpoints(api, "/v0", registryService)
+
+	encodedName := url.PathEscape(serverName)
+
+	t.Run("detail endpoint", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			version        string
+			queryParams    string
+			expectedStatus int
+		}{
+			{
+				name:           "deleted version without include_deleted returns 404",
+				version:        "1.0.0",
+				queryParams:    "",
+				expectedStatus: http.StatusNotFound,
+			},
+			{
+				name:           "deleted version with include_deleted=false returns 404",
+				version:        "1.0.0",
+				queryParams:    "?include_deleted=false",
+				expectedStatus: http.StatusNotFound,
+			},
+			{
+				name:           "deleted version with include_deleted=true returns 200",
+				version:        "1.0.0",
+				queryParams:    "?include_deleted=true",
+				expectedStatus: http.StatusOK,
+			},
+			{
+				name:           "active version without include_deleted returns 200",
+				version:        "2.0.0",
+				queryParams:    "",
+				expectedStatus: http.StatusOK,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				encodedVersion := url.PathEscape(tt.version)
+				req := httptest.NewRequest(http.MethodGet, "/v0/servers/"+encodedName+"/versions/"+encodedVersion+tt.queryParams, nil)
+				w := httptest.NewRecorder()
+
+				mux.ServeHTTP(w, req)
+
+				assert.Equal(t, tt.expectedStatus, w.Code)
+
+				if tt.expectedStatus == http.StatusOK {
+					var resp apiv0.ServerResponse
+					err := json.NewDecoder(w.Body).Decode(&resp)
+					assert.NoError(t, err)
+					assert.Equal(t, tt.version, resp.Server.Version)
+				}
+			})
+		}
+	})
+
+	t.Run("version history endpoint", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			queryParams    string
+			expectedStatus int
+			expectedCount  int
+		}{
+			{
+				name:           "without include_deleted excludes deleted versions",
+				queryParams:    "",
+				expectedStatus: http.StatusOK,
+				expectedCount:  1,
+			},
+			{
+				name:           "include_deleted=false excludes deleted versions",
+				queryParams:    "?include_deleted=false",
+				expectedStatus: http.StatusOK,
+				expectedCount:  1,
+			},
+			{
+				name:           "include_deleted=true includes deleted versions",
+				queryParams:    "?include_deleted=true",
+				expectedStatus: http.StatusOK,
+				expectedCount:  2,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, "/v0/servers/"+encodedName+"/versions"+tt.queryParams, nil)
+				w := httptest.NewRecorder()
+
+				mux.ServeHTTP(w, req)
+
+				assert.Equal(t, tt.expectedStatus, w.Code)
+
+				var resp apiv0.ServerListResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Len(t, resp.Servers, tt.expectedCount)
+			})
+		}
+	})
+}
