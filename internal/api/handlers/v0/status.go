@@ -297,4 +297,3 @@ func validateBulkStatusTransition(versions []*apiv0.ServerResponse, newStatus mo
 	// No versions would have any changes
 	return huma.Error400BadRequest("No changes to apply: all versions already have the requested status and message")
 }
-
